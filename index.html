@@ -17,14 +17,6 @@
   <meta name="keywords" content="">
   
     <meta name="description" content="xxxxxxxxxxxx">
-<meta property="og:type" content="website">
-<meta property="og:title" content="pwnull的自留地">
-<meta property="og:url" content="https://pwnull.github.io/index.html">
-<meta property="og:site_name" content="pwnull的自留地">
-<meta property="og:description" content="xxxxxxxxxxxx">
-<meta property="og:locale" content="zh_CN">
-<meta property="article:author" content="pwnull">
-<meta name="twitter:card" content="summary_large_image">
   
   
   
@@ -60,7 +52,7 @@
   <script id="fluid-configs">
     var Fluid = window.Fluid || {};
     Fluid.ctx = Object.assign({}, Fluid.ctx)
-    var CONFIG = {"hostname":"pwnull.github.io","root":"/","version":"1.9.2","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+    var CONFIG = {"hostname":"pwnull.github.io","root":"/","version":"1.9.2","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"left","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
 
     if (CONFIG.web_analytics.follow_dnt) {
       var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
@@ -225,15 +217,17 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h1 class="index-header">
         
-        <a href="/2022/08/22/hello-world/" target="_self">
-          Hello World
+          <i class="index-pin iconfont icon-top" title="Pin on top"></i>
+        
+        <a href="/jndi-injection-history/" target="_self">
+          当我们谈论JNDI注入时，我们在谈论什么
         </a>
       </h1>
 
       
-      <a class="index-excerpt index-excerpt__noimg" href="/2022/08/22/hello-world/" target="_self">
+      <a class="index-excerpt index-excerpt__noimg" href="/jndi-injection-history/" target="_self">
         <div>
-          Welcome to Hexo! This is your very first post. Check documentation for more info. If you get any problems when using Hexo, you can find the answer in troubleshooting or you can ask me on GitHub. Quick
+          JNDI注入的利用根据JDK更新历史可以分为两个阶段，第一阶段是在JDK8u191之前，攻击者可以利用自搭建的RMI&#x2F;LDAP恶意服务器，让客户端去获取并加载我们放置的恶意类，该阶段的利用手法不受classpath是否拥有Gadget的限制。第二阶段是在JDK8u191之后，JDK增加了trustURLCodebase配置导致这种加载恶意类的方式失效，进而找出了 javaSerializ
         </div>
       </a>
 
@@ -241,12 +235,42 @@
         
           <div class="post-meta mr-3">
             <i class="iconfont icon-date"></i>
-            <time datetime="2022-08-22 09:07" pubdate>
-              2022-08-22
+            <time datetime="2022-11-05 10:00" pubdate>
+              2022-11-05
             </time>
           </div>
         
         
+          <div class="post-meta mr-3 d-flex align-items-center">
+            <i class="iconfont icon-category"></i>
+            
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/" class="category-chain-item">代码审计</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+          </div>
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/JNDI/">#JNDI</a>
+            
+              <a href="/tags/JavaSec/">#JavaSec</a>
+            
+          </div>
         
       </div>
     </article>
