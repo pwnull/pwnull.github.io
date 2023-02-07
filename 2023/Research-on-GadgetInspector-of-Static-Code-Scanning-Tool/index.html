@@ -1,0 +1,877 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/ico.png">
+  <link rel="icon" href="/img/ico.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="pwnull">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="反序列化漏洞一直占据着JAVA安全的半壁江山，是每个JAVA安全研究者都绕不开的大山之一。从15年被 @frohoff and @gebl 公布利用到现在近8年的时间，反序列化漏洞在Oracle&amp;#x2F;Apache&amp;#x2F;vmware&amp;#x2F;IBM&amp;#x2F;国产等众多厂商的系统、组件、中间件中肆虐横行。笔者在之前文章分析的JNDI&amp;#x2F;RMI&amp;#x2F;JMX等均与此安全问题有">
+  
+  
+  
+  <title>静态代码扫描工具之GadgetInspector探究 - 进阶的胖闹-pwnull</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"pwnull.github.io","root":"/","version":"1.9.2","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"left","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":null,"gtag":null,"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml"};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>进阶的胖闹-pwnull</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/">
+                <i class="iconfont icon-home-fill"></i>
+                首页
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/">
+                <i class="iconfont icon-archive-fill"></i>
+                归档
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/">
+                <i class="iconfont icon-category-fill"></i>
+                分类
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/">
+                <i class="iconfont icon-tags-fill"></i>
+                标签
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/">
+                <i class="iconfont icon-user-fill"></i>
+                关于
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              &nbsp;<i class="iconfont icon-search"></i>&nbsp;
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">&nbsp;<i
+                class="iconfont icon-dark" id="color-toggle-icon"></i>&nbsp;</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="静态代码扫描工具之GadgetInspector探究"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2023-02-28 10:00" pubdate>
+          2023-02-28
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          <!-- compatible with older versions-->
+          21k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          <!-- compatible with older versions-->
+          173 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="padding-left: 2rem; margin-right: -1rem">
+    <div id="toc">
+  <p class="toc-header"><i class="iconfont icon-list"></i>&nbsp;目录</p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <!-- SEO header -->
+            <h1 style="display: none">静态代码扫描工具之GadgetInspector探究</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <p>反序列化漏洞一直占据着JAVA安全的半壁江山，是每个JAVA安全研究者都绕不开的大山之一。从15年被 <a target="_blank" rel="noopener" href="https://twitter.com/frohoff">@frohoff</a> and <a target="_blank" rel="noopener" href="https://twitter.com/gebl">@gebl</a> 公布利用到现在近8年的时间，反序列化漏洞在Oracle&#x2F;Apache&#x2F;vmware&#x2F;IBM&#x2F;国产等众多厂商的系统、组件、中间件中肆虐横行。笔者在之前文章分析的JNDI&#x2F;RMI&#x2F;JMX等均与此安全问题有千丝万缕的关系。链接直达：</p>
+<p><a href="https://pwnull.github.io/2022/How-to-attack-RMI-based-JMX-services/"> Attack JMX Service的打开方式 </a></p>
+<p><a href="https://pwnull.github.io/2022/Exploring-JAVA-RMI's-offensive-and-defensive-history/">论JAVA-RMI的攻防演进史</a></p>
+<p><a href="https://pwnull.github.io/2022/jndi-injection-history/">当我们谈论JNDI注入时，我们在谈论什么</a></p>
+<p>反序列化漏洞利用的入口方法source及最终漏洞触发方法sink都容易确定，而寻找连接入口方法到漏洞触发方法中间的利用链路才是挖掘与利用的重点。在日常的审计挖掘过程中，日益感觉ysoserial、marshalsec中现存的利用链并不能百发百中，很多时候都需要我们根据现有环境寻找新的利用链。在寻找过程中也非常考验挖掘者的知识储备与耐心。那有没有一款自动化&#x2F;半自动化的工具可以辅助我们去寻找呢？为了解决这个问题，Ian Haken在18年的blackhat大会推出了一款自研扫描工具 GadgetInspector，关于该款工具的原文介绍、源码及视频如下：</p>
+<p>源码：<a target="_blank" rel="noopener" href="https://github.com/JackOfMostTrades/gadgetinspector">https://github.com/JackOfMostTrades/gadgetinspector</a></p>
+<p>文稿：<a target="_blank" rel="noopener" href="https://i.blackhat.com/us-18/Thu-August-9/us-18-Haken-Automated-Discovery-of-Deserialization-Gadget-Chains.pdf">https://i.blackhat.com/us-18/Thu-August-9/us-18-Haken-Automated-Discovery-of-Deserialization-Gadget-Chains.pdf</a></p>
+<p>视频：<a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=fdctNIt8OIw">https://www.youtube.com/watch?v=fdctNIt8OIw</a></p>
+<p>圈内的师傅也对此工具做过分析与完善，本文也参考了一些师傅们的文章，致敬感谢分享！</p>
+<p><a target="_blank" rel="noopener" href="https://threedr3am.github.io/2020/01/09/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E5%88%A9%E7%94%A8%E9%93%BE%E8%87%AA%E5%8A%A8%E6%8C%96%E6%8E%98%E5%B7%A5%E5%85%B7gadgetinspector%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90/">threedr3am-java反序列化利用链自动挖掘工具gadgetinspector源码浅析</a></p>
+<p><a target="_blank" rel="noopener" href="https://paper.seebug.org/1034/">Longofo-Java 反序列化工具 gadgetinspector 初窥</a></p>
+<p><a target="_blank" rel="noopener" href="https://su18.org/post/gadgetor/">su18-高效挖掘反序列化漏洞——GadgetInspector改造</a></p>
+<p>整体来看 GadgetInspector工具运行流程主要为对classpath中全部class进行信息收集，生成方法内、方法间的污点传递关系，最终找到从source可以通往sink的利用链。另外扫描针对的是java字节码，所以可以直接分析Jar包&#x2F;War包而无需项目java源码。整个过程还是比较清晰的，其中涉及到JAVA ASM技术、JVM指令、匿拓扑排序、进出栈模拟等等知识。之前对这块内容了解不多，也想做个扫描工具辅助自己做一些基础审计的工作，争取早日解放双手！本文从所需的前置知识、分析扫描流程中的关键类及实际测试扫描三部分展开，如果对文章有疑问&#x2F;建议或者想一起研究交流的师傅，欢迎私信😜</p>
+<h2 id="1、前置知识"><a href="#1、前置知识" class="headerlink" title="1、前置知识"></a>1、前置知识</h2><p>前置知识部分主要有描述符、ASM技术及JVM相关的知识。万丈高楼平地起，晓得了基础知识方便后续展开分析</p>
+<h3 id="1-1-描述符"><a href="#1-1-描述符" class="headerlink" title="1.1 描述符"></a>1.1 描述符</h3><p>GadgetInspector最开始对类、方法信息搜集阶段会用到类型及方法描述符</p>
+<p>1、类型描述符，JAVA原始类型的描述符均对应一个大写字母。非数组的引用类型使用：<code>L+类全限定名称+;</code> 、数组引用类型使用：<code>[+数组内类型描述符+;</code></p>
+<figure class="highlight xl"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs xl"><span class="hljs-function"><span class="hljs-title">byte</span> -&gt;</span> B<br><span class="hljs-function"><span class="hljs-title">short</span> -&gt;</span> S<br><span class="hljs-function"><span class="hljs-title">int</span> -&gt;</span> I<br><span class="hljs-function"><span class="hljs-title">long</span> -&gt;</span> J<br><span class="hljs-function"><span class="hljs-title">float</span> -&gt;</span> F<br><span class="hljs-function"><span class="hljs-title">double</span> -&gt;</span> D<br><span class="hljs-function"><span class="hljs-title">char</span> -&gt;</span> C<br><span class="hljs-function"><span class="hljs-title">void</span> -&gt;</span> V<br><span class="hljs-function"><span class="hljs-title">boolean</span> -&gt;</span> Z<br><br><span class="hljs-function"><span class="hljs-title">java</span>.lang.Runtime -&gt;</span> Ljava/lang/Runtime;<br><span class="hljs-function"><span class="hljs-title">java</span>.lang.Object[] -&gt;</span> [java/lang/Object;<br><span class="hljs-function"><span class="hljs-title">int</span>[][] -&gt;</span> [[I<br></code></pre></td></tr></table></figure>
+
+<p>2、方法描述符</p>
+<p>字节码中保存参数类型列表及返回值类型时会用到方法描述符，规则：1、格式为<code>(+参数列表+)+返回值;</code>2、参数列表无需用逗号分割</p>
+<figure class="highlight livescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs livescript"><span class="hljs-built_in">String</span> add<span class="hljs-function"><span class="hljs-params">(int a,int b)</span> -&gt;</span> (II)Ljava/lang/<span class="hljs-built_in">String</span>;<br><span class="hljs-literal">void</span> sub<span class="hljs-function"><span class="hljs-params">(int a,int b)</span> -&gt;</span> (II)V<br>int[] s<span class="hljs-function"><span class="hljs-params">(<span class="hljs-built_in">Object</span> obj)</span> -&gt;</span> (Ljava/lang/<span class="hljs-built_in">Object</span>;)[I<br><span class="hljs-literal">void</span> a<span class="hljs-function"><span class="hljs-params">()</span> -&gt;</span> ()V<br></code></pre></td></tr></table></figure>
+
+<p>3、方法 access值</p>
+<p>access值是按照方法的修饰符对应值做”按位或|”计算得来的，如main函数为public、static修饰，则<code>access = ACC_PUBLIC(1) | ACC_STATIC(8) = 9</code>，具体对应值的定义在org.objectweb.asm.Opcodes类中</p>
+<table>
+<thead>
+<tr>
+<th>access</th>
+<th>name</th>
+<th>desc</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><init></td>
+<td>()V</td>
+</tr>
+<tr>
+<td>9</td>
+<td>main</td>
+<td>([Ljava&#x2F;lang&#x2F;String;)V</td>
+</tr>
+</tbody></table>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/1.png" srcset="/img/loading.gif" lazyload></p>
+<p><client>方法：java类加载初始化过程中，会将类中的类变量赋值、静态代码块中的语句集合为<client>方法</p>
+<h3 id="1-2-ASM技术"><a href="#1-2-ASM技术" class="headerlink" title="1.2 ASM技术"></a>1.2 ASM技术</h3><p>GadgetInspector中主要利用了ASM的访问者模式对类&#x2F;方法进行观察操作，ASM封装了对于class文件结构各项元素的操作，对类使用ClassVisitor实现类进行观察、对方法使用MethodVisitor实现类进行观察</p>
+<p>ClassVisitor 用于观察类信息，GadgetInspector中使用的几个类观察类：MethodDiscoveryClassVisitor、MethodCallDiscoveryClassVisitor、PassthroughDataflowClassVisitor、ModelGeneratorClassVisitor。这些类都继承实现了父类ClassVisitor的visitXXX方法，如下是方法名称及触发调用的条件</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-attribute">visit</span> 初始化被观察类的描述信息<br>visitField 观察到属性时触发此方法<br>visitMethod 观察到方法时触发此方法<br></code></pre></td></tr></table></figure>
+
+<p>MethodVisitor 用于观察方法信息，GadgetInspector中使用的几个方法观察类：MethodCallDiscoveryMethodVisitor、PassthroughDataflowMethodVisitor、ModelGeneratorMethodVisitor、TaintTrackingMethodVisitor。在这些类中涉及到几个比较重要且频繁调用的visitXXX方法，如下是方法名称及触发调用的条件</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-attribute">visitCode</span> 进入方法时触发<br>visitMethodInsn 方法内调用子方法时触发<br>visitInsn 碰到无操作数指令时触发<br>visitFieldInsn 调用字段时触发<br>visitVarInsn 操作变量时触发<br></code></pre></td></tr></table></figure>
+
+<p>另外可以使用IDEA的ASM Bytecode Viewer插件查看类对应的字节码及ASM代码</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/2.png" srcset="/img/loading.gif" lazyload></p>
+<p>ASM代码</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/3.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="1-3-JVM"><a href="#1-3-JVM" class="headerlink" title="1.3 JVM"></a>1.3 JVM</h3><p>在重点分析下节内容前，我们先引入一些JVM中的基础概念：变量表、操作数栈、JVM指令集</p>
+<p>本地变量表 <strong>Local Variable Table</strong> ：存储的是 方法参数和方法内定义的局部变量。容量以 变量槽 Variable Slot 为最小单位，一个槽可以放置32位以内的数据类型</p>
+<p>操作数栈 <strong>Operand Stack</strong> ：是一个后入先出栈LIFO（last in first out）。当一个方法开始执行前操作数栈是空的，随着方法执行，会从本地变量表、对象实例字段中加载变量&#x2F;常量到操作数栈中，也会将栈中元素出栈到本地变量表或返回给方法调用者，即为出栈入栈操作。当方法执行完毕且有返回值赋值给变量时，需要通过 [type]store_[n]等指令将变量(类型type)存入本地变量表对应的位置(索引n)。而一次方法的执行往往包含多个出栈&#x2F;入栈的过程</p>
+<p>JVM指令集<strong>Java Virtual Machine Instruction Set</strong>：由操作码与操作数组成，一条JVM指令可以包含0个或多个操作数。大多数的JVM指令直接包含了操作对应的数据类型信息，比如iload、fload就表示从本地变量表中加载int数据、float数据到操作数栈。在GadgetInspector工具中 TaintTrackingMethodVisitor#visitInsn就模拟了无操作数的JVM指令操作，TaintTrackingMethodVisitor#visitIntInsn模拟了一个操作数的JVM指令操作（第一个int参数表示操作码、第二个表示操作数）</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/4.png" srcset="/img/loading.gif" lazyload></p>
+<p>各指令代表的含义可参考oracle官方文档：<a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/specs/jvms/se19/html/jvms-6.html">https://docs.oracle.com/javase/specs/jvms/se19/html/jvms-6.html</a></p>
+<p>每个类对应的jvm指令集可以使用idea插件jclasslib很方便的查看：<a target="_blank" rel="noopener" href="https://github.com/ingokegel/jclasslib">https://github.com/ingokegel/jclasslib</a>  如使用jclasslib查看java.lang.Runtime#halt方法的指令集</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs reasonml"><span class="hljs-comment">//source</span><br>public void halt(<span class="hljs-built_in">int</span> status) &#123;<br>    SecurityManager sm = <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">System</span>.</span></span>get<span class="hljs-constructor">SecurityManager()</span>;<br>    <span class="hljs-keyword">if</span> (sm != null) &#123;<br>    	sm.check<span class="hljs-constructor">Exit(<span class="hljs-params">status</span>)</span>;<br>    &#125;<br>    <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">Shutdown</span>.</span></span>before<span class="hljs-constructor">Halt()</span>;<br>    <span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">Shutdown</span>.</span></span>halt(status);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>对应的JVM指令：</p>
+<figure class="highlight gradle"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs gradle"> <span class="hljs-number">0</span> invokestatic #<span class="hljs-number">203</span> &lt;java<span class="hljs-regexp">/lang/</span>System.getSecurityManager : ()Ljava<span class="hljs-regexp">/lang/</span>SecurityManager;&gt;<br> <span class="hljs-number">3</span> astore_2<br> <span class="hljs-number">4</span> aload_2<br> <span class="hljs-number">5</span> ifnull <span class="hljs-number">13</span> (+<span class="hljs-number">8</span>)<br> <span class="hljs-number">8</span> aload_2<br> <span class="hljs-number">9</span> iload_1<br><span class="hljs-number">10</span> invokevirtual #<span class="hljs-number">191</span> &lt;java<span class="hljs-regexp">/lang/</span>SecurityManager.checkExit : (I)V&gt;<br><span class="hljs-number">13</span> invokestatic #<span class="hljs-number">194</span> &lt;java<span class="hljs-regexp">/lang/</span>Shutdown.beforeHalt : ()V&gt;<br><span class="hljs-number">16</span> iload_1<br><span class="hljs-number">17</span> invokestatic #<span class="hljs-number">196</span> &lt;java<span class="hljs-regexp">/lang/</span>Shutdown.halt : (I)V&gt;<br><span class="hljs-number">20</span> <span class="hljs-keyword">return</span><br><br></code></pre></td></tr></table></figure>
+
+<p>方法体内每行代码的操作指令</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/5.png" srcset="/img/loading.gif" lazyload></p>
+<p>结合使用插件ASM Bytecode Viewer中的ASM代码、插件jclasslib生成的JVM指令就可以很好的辅助我们理解GadgetInspector是如何利用ASM观察者模式、JVM指令操作、模拟java stack进出这些技术最终达到挖掘利用链的目的的</p>
+<h2 id="2、关键类"><a href="#2、关键类" class="headerlink" title="2、关键类"></a>2、关键类</h2><p>在整个项目中有一些关键类，承担了信息收集、方法内污点分析、方法间污点传递、逆拓扑排序、JVM 指令模拟、source方法查找、利用链整合等任务。我们按照扫描顺序重点分析下这几个关键类的代码</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/6.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="2-1-MethodDiscovery-类方法信息收集"><a href="#2-1-MethodDiscovery-类方法信息收集" class="headerlink" title="2.1 MethodDiscovery 类方法信息收集"></a>2.1 MethodDiscovery 类方法信息收集</h3><p>MethodDiscovery类用于发现目标classpath中的的方法，但是实际扫描时会把gadgetinspector本身的类也收集进去 干扰我们的分析，我在getAllClasses中增加了逻辑判断来排除gadgetinspector本身的类</p>
+<figure class="highlight less"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs less"><span class="hljs-selector-id">#ClassResourceEnumerator</span><span class="hljs-selector-id">#getAllClasses</span><br><span class="hljs-selector-tag">for</span>(ClassPath.ClassInfo <span class="hljs-attribute">classInfo </span>: ClassPath.<span class="hljs-built_in">from</span>(classLoader).<span class="hljs-built_in">getAllClasses</span>())&#123;<br>            <span class="hljs-selector-tag">if</span>((!classInfo.<span class="hljs-built_in">getName</span>().<span class="hljs-built_in">contains</span>(<span class="hljs-string">&quot;gadgetinspector&quot;</span>)))&#123;<br>                <span class="hljs-selector-tag">result</span><span class="hljs-selector-class">.add</span>(new <span class="hljs-built_in">ClassLoaderClassResource</span>(classLoader,classInfo.<span class="hljs-built_in">getResourceName</span>()));<br>	&#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/7.png" srcset="/img/loading.gif" lazyload></p>
+<p>用于观察的ASM类为MethodDiscovery.MethodDiscoveryClassVisitor，其继承ClassVisitor类：重写了visitField、visitMethod方法，在观察到目标类的属性、方法时，将其添加到待分析的members List与discoveredMethods List中</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/8.png" srcset="/img/loading.gif" lazyload></p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/9.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="2-2-PassthroughDiscovery-单方法的污点分析"><a href="#2-2-PassthroughDiscovery-单方法的污点分析" class="headerlink" title="2.2 PassthroughDiscovery  单方法的污点分析"></a>2.2 PassthroughDiscovery  单方法的污点分析</h3><p>PassthroughDiscovery类是针对单个方法的局部污点分析，得到可影响(污染)返回值的参数索引，生成passthrough数据流。共有三步：1、分析调用关系，得到每个方法调用的方法集合；2、对所有方法的调用进行逆拓扑排序；3、分析数据流传递情况，生成passthroughDataflow数据流</p>
+<p>PassthroughDiscovery#discover</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/10.png" srcset="/img/loading.gif" lazyload></p>
+<p>如下是分析FnEval类的结果，org.example.FnEval#invokeCall方法内部调用了java.lang.Runtime#getRuntime、java.lang.Runtime#exec(java.lang.String)两个方法</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/11.png" srcset="/img/loading.gif" lazyload></p>
+<h4 id="2-2-1-分析每个方法的调用关系"><a href="#2-2-1-分析每个方法的调用关系" class="headerlink" title="2.2.1 分析每个方法的调用关系"></a>2.2.1 分析每个方法的调用关系</h4><p>第一步是分析2.1得到的方法集合，将每个方法内部调用的方法都存储到methodCalls Map中。分析的核心类是MethodCallDiscoveryClassVisitor与MethodCallDiscoveryMethodVisitor</p>
+<p>PassthroughDiscovery.MethodCallDiscoveryClassVisitor  继承自ClassVisitor类：重写了visitMethod方法，方法体内使用MethodCallDiscoveryMethodVisitor进行方法级别的观察分析</p>
+<p>PassthroughDiscovery.MethodCallDiscoveryMethodVisitor 继承自MethodVisitor类：重写了visitMethodInsn方法，方法体内每次方法调用都会触发该重写方法，然后会将被调用的方法信息（所属类信息、方法描述信息）添加到结果methodCalls Map中</p>
+<p>PassthroughDiscovery.MethodCallDiscoveryMethodVisitor#visitMethodInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/12.png" srcset="/img/loading.gif" lazyload></p>
+<h4 id="2-2-2-逆拓扑排序"><a href="#2-2-2-逆拓扑排序" class="headerlink" title="2.2.2 逆拓扑排序"></a>2.2.2 逆拓扑排序</h4><p>将2.2.1得到的methodCalls Map经过逆拓扑排序得到sortedMethods List，PassthroughDiscovery#topologicallySortMethodCalls 排序方法如下</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/13.png" srcset="/img/loading.gif" lazyload></p>
+<p>排序分析参考了Longofo师傅的 <a target="_blank" rel="noopener" href="https://paper.seebug.org/1034/#step3-passthrough">分析</a>  PassthroughDiscovery#dfsTsort</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/14.png" srcset="/img/loading.gif" lazyload></p>
+<ul>
+<li>dfsStack：用来分析方法调用顺序，保证在逆拓扑时候不形成环</li>
+<li>visitedNodes：访问过的结点，在一条调用链出现重合的时候，不会造成重复的排序</li>
+<li>sortedMethods：最终逆拓扑排序出来的结果</li>
+</ul>
+<p>举例如下图为方法调用树，初始方法为med1，有6条方法调用链</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/15.png" srcset="/img/loading.gif" lazyload></p>
+<p>最终经过逆拓扑排序后得到的顺序是：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs">med7、med8、med3、med6、med2、med4、med1<br></code></pre></td></tr></table></figure>
+
+<p>看到在gadgetinspector.PassthroughDiscovery#dfsTsort的开头有这样两行代码</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/16.png" srcset="/img/loading.gif" lazyload></p>
+<p>第一个if语句（圈1）目的是处理”方法互相调用形成环”的问题，如果正在分析的dfsStack中包含med1，那么就不往dfsStack中再添加了。第二个if语句（圈2）是处理”方法重复调用”的问题，如果在分析med1-&gt;med3这条链时发现med3在med1-&gt;med2-med3链中已访问过，那么不再继续访问。策略非常粗暴，对于第一次已排序过的方法，第二次碰到时不再分析。虽然避免了重复扫描跟环的问题，但是造成了严重的漏报。如果med1-&gt;med3-&gt;med7 刚好可以走通source到sink，利用链也短，工具由于策略问题反而不会扫到。所以这一步需要改进策略以平衡”搜索广度与深度策略的平衡问题”</p>
+<p>另外这里为什么要用逆拓扑排序DFS算法，而不是正向拓扑排序BFS呢？这个我们下一章节会碰到，是因为要确定的是父方法的返回值与哪个参数有关，而在方法执行过程中，返回值会受到子方法的影响，所以需要先判断子方法的参数与返回值的关联关系，进而才能得出父方法的参数污染情况。所以这里需要使用逆拓扑排序DFS算法</p>
+<h4 id="2-2-3-单个方法污点分析"><a href="#2-2-3-单个方法污点分析" class="headerlink" title="2.2.3 单个方法污点分析"></a>2.2.3 单个方法污点分析</h4><p>依次分析2.2.2步得到的sortedMethods List后，可以得出每个方法的返回值受哪个参数的影响(也叫污染)。这一步是信息搜集的重点，有了每个方法的污染结果后就可以开始串联方法进行分析</p>
+<p>PassthroughDiscovery.PassthroughDataflowClassVisitor  继承自ClassVisitor类，重了写visitMethod方法：对目标方法使用PassthroughDataflowMethodVisitor进行方法级别的观察分析</p>
+<p>PassthroughDiscovery.PassthroughDataflowMethodVisitor继承自TaintTrackingMethodVisitor类；父类TaintTrackingMethodVisitor 继承自MethodVisitor类</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/17.png" srcset="/img/loading.gif" lazyload></p>
+<p>TaintTrackingMethodVisitor#TaintTrackingMethodVisitor</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/18.png" srcset="/img/loading.gif" lazyload></p>
+<p>这两者是父子类关系，子类PassthroughDataflowMethodVisitor实现了：visitCode、visitInsn、visitFieldInsn、visitMethodInsn等方法</p>
+<p>父类实现了：visitCode、visitFrame、visitInsn、visitIntInsn、visitVarInsn、visitTypeInsn、visitFieldInsn、visitMethodInsn、visitInvokeDynamicInsn、visitJumpInsn、visitLabel、visitLdcInsn、visitIincInsn、visitTableSwitchInsn、visitLookupSwitchInsn、visitMultiANewArrayInsn、visitInsnAnnotation、visitTryCatchBlock、visitTryCatchAnnotation、visitMaxs、visitEnd等方法。这些是ASM观察类碰到各种JVM指令时会触发调用的方法</p>
+<p>这对父子类是分析数据流的核心类，其使用JAVA ASM技术观察方法&#x2F;属性&#x2F;变量操作&#x2F;子方法调用、模拟JVM Stack入栈出栈操作，相当于让静态代码”动”了起来，在动的过程中去观察参数的传递污染、方法的调用，进而找出可以从source通往sink之间的链路。gadgetinspector开发者在TaintTrackingMethodVisitor.SavedVariableState类中创建了localVars、stackVars用来对标本地变量表Local Variable Table及操作数栈 Operand Stack，在同类下利用ASM技术中visitXXX等观察方法模拟了JVM指令集调用push()、pop()对变量表及操作栈的进出操作</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/19.png" srcset="/img/loading.gif" lazyload></p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/20.png" srcset="/img/loading.gif" lazyload></p>
+<p>接着分析父子类实现的几个关键方法：</p>
+<p>1、visitCode：观察方法时，首先会先触发visitCode，子类将 [[对象实例],arg1,arg2]按照先后顺序添加到本地变量表localVars中，用于后续出栈入栈的数据来源。而父类作用是初始化了本地变量表localVars、操作数栈stackVars</p>
+<p>PassthroughDiscovery.PassthroughDataflowMethodVisitor#visitCode</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/21.png" srcset="/img/loading.gif" lazyload></p>
+<p>TaintTrackingMethodVisitor#visitCode 用于清空本地变量表与操作数栈及占位</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/22.png" srcset="/img/loading.gif" lazyload></p>
+<p>2、visitInsn：观察方法时，碰到无操作数指令时会触发visitInsn ，子类PassthroughDataflowMethodVisitor主要处理碰到return指令集时的参数污染情况，父类作用是模拟无操作数指令集对应的出栈入栈操作，如[type]CONST_[n]推送数据到栈顶、[type]ASTORE数组出栈到表、[type]ALOAD数组出表入栈等等</p>
+<p>PassthroughDataflowMethodVisitor#visitInsn是操作中的重点，会将栈顶数据添加到污点结果集合returnTaint，此时栈顶元素可能为：1、对象实例&#x2F;实例属性；2、被调用方法的返回值。ASM在碰到这两者时会调用visitFieldInsn、visitMethodInsn进行观察，这两个方法均会将污点参数索引添加至栈顶</p>
+<p>PassthroughDiscovery.PassthroughDataflowMethodVisitor#visitInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/23.png" srcset="/img/loading.gif" lazyload></p>
+<p>TaintTrackingMethodVisitor#visitInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/24.png" srcset="/img/loading.gif" lazyload></p>
+<p>3、visitFieldInsn：观察方法时，每次对属性字段的操作都会触发visitFieldInsn，子类PassthroughDataflowMethodVisitor主要处理GETFIELD指令：对方法所属类使用决策器serializableDecider判断、对属性判断是否被transient修饰。所属类通过决策器且属性不被transient修饰就通过决策。父类模拟了 获取静态属性值GETSTATIC、设置静态属性值PUTSTATIC、获取非静态属性值GETFIELD、设置非静态属性值PUTFIELD4个JVM指令的出栈入栈操作</p>
+<p>PassthroughDiscovery.PassthroughDataflowMethodVisitor#visitFieldInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/25.png" srcset="/img/loading.gif" lazyload></p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/26.png" srcset="/img/loading.gif" lazyload></p>
+<p>TaintTrackingMethodVisitor#visitFieldInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/27.png" srcset="/img/loading.gif" lazyload></p>
+<p>4、visitMethodInsn：观察方法时，方法体内每次调用其它方法时都会触发visitMethodInsn。子类主要处理 init初始化方法污染情况、调用目标方法的污染情况。父类主要处理init初始化方法、白名单、调用目标方法的污染情况、Collection&#x2F;Map子类的方法参数的污染情况。调用方法分为调用静态方法、实例方法、超类构造方法、接口方法，调用方法所属类为引用类型时会调用INVOKEVIRTUAL指令、为接口时调用INVOKEINTERFACE指令</p>
+<p>visitMethodInsn先将实例、入参挨个添加到argTypes数组</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/28.png" srcset="/img/loading.gif" lazyload></p>
+<p>假定被调用方法有Object、String 2个入参，那么argTypes为this、Object、String。接着将调用目标方法前放到栈中的参数(即argTypes)，都复制一份到argTaint。如果被调用方法是init方法，那么this实例（索引为0）是可以进行污染传递的</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/29.png" srcset="/img/loading.gif" lazyload></p>
+<p>由于方法调用顺序经过逆拓扑排序，所以在分析时其方法体内调用的子方法一定已经被分析过。这一步会分析调用方法的返回值是否会收到被调用方法参数的影响，如果影响，那么添加到污点集合returnTaint</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/30.png" srcset="/img/loading.gif" lazyload></p>
+<p>子类判断之后，先将污点参数索引放到resultTaint，然后调用父类继续处理init方法、ObjectInputStream#defaultReadObject、白名单方法、Map&#x2F;Collection子类方法、被调用方法的污染传递情况，最后把被调用方法的污染参数索引放入操作数栈再次回到子类。由于resultTaint是Set类型，所以添加时会自动对索引进行去重</p>
+<p>TaintTrackingMethodVisitor#visitMethodInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/31.png" srcset="/img/loading.gif" lazyload></p>
+<p>另外在2.3 CallGraphDiscovery#ModelGeneratorMethodVisitor 中会判断调用方法的传入参数是否会影响被调用方法的传入参数，最后在GadgetChainDiscovery中判断两者参数索引是否一致，如果一致表明此链可以走通</p>
+<p>5、visitVarInsn：观察方法时，方法体内每次对局部变量操作时都会触发visitVarInsn，此方法在父类中定义。 利用push、pop方法对本地变量表localVars、操作数栈stackVars操作模拟出栈入栈 [type]STORE、[type]LOAD等JVM指令</p>
+<p>TaintTrackingMethodVisitor#visitVarInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/32.png" srcset="/img/loading.gif" lazyload></p>
+<p>经过如上分析，最后得到的分析结果都保存在passthrough.dat文件中，格式为：类 方法 方法描述 污点索引</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/33.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="2-3-CallGraphDiscovery-方法间的污点传递"><a href="#2-3-CallGraphDiscovery-方法间的污点传递" class="headerlink" title="2.3 CallGraphDiscovery 方法间的污点传递"></a>2.3 CallGraphDiscovery 方法间的污点传递</h3><p>2.2中的PassthroughDiscovery分析得到的是调用方法返回值与被调用方法参数传递的关系，如果想要知道方法链能否从source源走通到sink点，还需要分析每个调用方法入参与被调用方法入参的传递关系，CallGraphDiscovery类就是为了解决这个问题</p>
+<p>这一步的核心使用了ModelGeneratorClassVisitor，其实现了visitMethod、visitOuterClass、visitInnerClass等方法，在visitMethod方法中使用ModelGeneratorMethodVisitor进行方法级别的观察分析。ModelGeneratorMethodVisitor类与PassthroughDataflowMethodVisitor一样，都是继承自TaintTrackingMethodVisitor类，父类我们在上一步2.2章已经分析过不再赘述。子类ModelGeneratorMethodVisitor主要方法有：visitCode、visitMethodInsn、visitFieldInsn，依次分析下：</p>
+<p>1、利用visitCode() 往本地变量表添加调用方法入参(当方法存在2个形参时，非静态方法：[[0,arg0],[1,arg1],[2,arg2]]  静态方法：[[0,arg0],[1,arg1]])；</p>
+<p>CallGraphDiscovery.ModelGeneratorMethodVisitor#visitCode</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/34.png" srcset="/img/loading.gif" lazyload></p>
+<p>2、利用visitFieldInsn()将获取的field名称变为arg[n].[name]放入操作数栈供后面方法调用时使用，这一步主要作用是将方法体内操作的属性与方法入参做关联，用于判断调用方法入参与被调用方法入参的关系。而这里也使用了跟2.2章一样的判断逻辑：因为java里面规定Transient修饰属性不参与反序列化过程，所以不考虑Transient属性修饰的变量传递。但是在实际挖掘过程中还存在一种情况：虽然属性被Transient修饰，但是类自己实现了writeObject&#x2F;writeExternal方法，方法体内会声明将Transient属性参与到序列化&#x2F;反序列化过程中。这种情况在之前的gadget中也比较常见，所以这里需要额外补充完善下Transient属性的判断逻辑</p>
+<p>CallGraphDiscovery.ModelGeneratorMethodVisitor#visitFieldInsn</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/35.png" srcset="/img/loading.gif" lazyload></p>
+<p>3、visitMethodInsn()方法创建了arg[N]进行标记，分析调用方法与被调用方法间的参数传递关系，并最终将结果赋值discoveredCalls存储到callgraph.dat中，格式为<code>调用者类名 | 调用者方法 | 调用者方法描述 | 被调用者类名 | 被调用者方法 | 被调用者方法描述 | 调用者方法参index | 调用者字段名 | 被调用者方法参数索引</code></p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/36.png" srcset="/img/loading.gif" lazyload></p>
+<p>4、举个例子，createMBean方法经过ModelGeneratorClassVisitor扫描后得到如下结果，调用方法createMBean参数索引(第2个形参name)与被调用方法cloneObjectName(第1个形参name)的参数传递。调用者字段名的值为空，说明从调用方法入参传递到被调用方法入参的是入参实例（arg1）而不是入参类实例的属性(arg1.name、arg1.pwd)</p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs awk">调用者类名 | 调用者方法 | 调用者方法描述 | 被调用者类名 | 被调用者方法 | 被调用者方法描述 | 调用者方法参index | 调用者字段名 | 被调用者方法参数索引<br>com<span class="hljs-regexp">/sun/</span>jmx<span class="hljs-regexp">/mbeanserver/</span>JmxMBeanServer	createMBean	(Ljava<span class="hljs-regexp">/lang/</span>String;Ljavax<span class="hljs-regexp">/management/</span>ObjectName;)Ljavax<span class="hljs-regexp">/management/</span>ObjectInstance;	com<span class="hljs-regexp">/sun/</span>jmx<span class="hljs-regexp">/mbeanserver/</span>JmxMBeanServer	cloneObjectName	(Ljavax<span class="hljs-regexp">/management/</span>ObjectName;)Ljavax<span class="hljs-regexp">/management/</span>ObjectName;	<span class="hljs-number">2</span>		<span class="hljs-number">1</span><br></code></pre></td></tr></table></figure>
+
+<p>com.sun.jmx.mbeanserver.JmxMBeanServer#createMBean(java.lang.String, javax.management.ObjectName)</p>
+<figure class="highlight processing"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs processing"><span class="hljs-keyword">public</span> ObjectInstance <span class="hljs-title function_">createMBean</span>(<span class="hljs-built_in">String</span> className, ObjectName name)<br>        <span class="hljs-keyword">throws</span> ReflectionException, InstanceAlreadyExistsException,<br>               MBeanRegistrationException, MBeanException,<br>               NotCompliantMBeanException &#123;<br><br>        <span class="hljs-keyword">return</span> mbsInterceptor.<span class="hljs-property">createMBean</span>(className,<br>                                          <span class="hljs-title function_">cloneObjectName</span>(name),<br>                                          (<span class="hljs-built_in">Object</span>[]) <span class="hljs-literal">null</span>,<br>                                          (<span class="hljs-built_in">String</span>[]) <span class="hljs-literal">null</span>);<br>    &#125;<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/37.png" srcset="/img/loading.gif" lazyload></p>
+<h3 id="2-4-SourceDiscovery-Source源发现"><a href="#2-4-SourceDiscovery-Source源发现" class="headerlink" title="2.4 SourceDiscovery Source源发现"></a>2.4 SourceDiscovery Source源发现</h3><p>SourceDiscovery是抽象类，其discover(classMap，methodMap，inheritanceMap)方法只提供了定义，具体的实现需要使用者自己扩展编写。而gadgetinspector内置了java原生反序列化、jackson反序列化 的SourceDiscovery实现类</p>
+<p>该步骤主要查找反序列化入口方法，每种反序列化操作的入口方法不同，如fastjson&#x2F;jackson的入口是getter&#x2F;setter方法、java原生反序列化是readObject&#x2F;readExterna方法。这里先以内置的jackson为例分析，jackson在对json字符串反序列化操作时，会调用类的无参构造方法进行类实例化，所以只有存在无参构造方法的类才满足jackson序列化类的要求，另外在反序列化过程中会根据具体情况调用getter&#x2F;setter方法。所以在扫描jackson反序列化gadget时把这三个方法均添加到source里面进行扫描</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/38.png" srcset="/img/loading.gif" lazyload></p>
+<p>最终把扫描的结果存储到source.dat文件中，格式如下</p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs awk">类名 方法名 方法描述 污染参数索引<br>java<span class="hljs-regexp">/awt/</span>TextField	&lt;init&gt;	()V	<span class="hljs-number">0</span><br>javax<span class="hljs-regexp">/swing/</span>JTextField	setActionCommand	(Ljava<span class="hljs-regexp">/lang/</span>String;)V	<span class="hljs-number">0</span><br>javax<span class="hljs-regexp">/swing/</span>JEditorPane	setPage	(Ljava<span class="hljs-regexp">/lang/</span>String;)V	<span class="hljs-number">0</span><br></code></pre></td></tr></table></figure>
+
+<h3 id="2-5-GadgetChainDiscovery-信息整合为GadgetChain"><a href="#2-5-GadgetChainDiscovery-信息整合为GadgetChain" class="headerlink" title="2.5 GadgetChainDiscovery 信息整合为GadgetChain"></a>2.5 GadgetChainDiscovery 信息整合为GadgetChain</h3><p>GadgetChainDiscovery#discover 方法对上述搜集到的所有信息进行整合，然后将每个source作为利用链的起点寻找调用的子方法、能将参数污染传递的子方法，如果末节点调用到先前定义好的sink方法，说明利用链可以走通，那么就标记成功，添加到discoveredGadgets中。否则再次循环methodsToExplore获取方法进行分析直到方法循环完毕。主要看下对于重写方法、搜索策略的处理</p>
+<p>1、InheritanceDeriver#getAllMethodImplementations搜集重写方法</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/39.png" srcset="/img/loading.gif" lazyload></p>
+<p>将搜集到的重写方法的结果保存到methodimpl.dat，格式如下：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs">类 方法 方法描述<br>	子类1 重写方法 方法描述<br>	子类2 重写方法 方法描述<br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/40.png" srcset="/img/loading.gif" lazyload></p>
+<p>2、将调用的方法集合规整格式得到graphCallMap，key为调用方法、value为被调用方法Set(添加时自动抛弃重复方法)</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/41.png" srcset="/img/loading.gif" lazyload></p>
+<p>如上面提到的com.sun.jmx.mbeanserver.JmxMBeanServer#createMBean方法调用了createMBean、cloneObjectName两个方法，这一步就是将两个子方法整合，最终得到[JmxMBeanServer#createMBean：[createMBean，cloneObjectName]]这种结构</p>
+<p><img src="/../../../2%E8%87%AA%E5%8A%A8%E5%8C%96%E5%AE%A1%E8%AE%A1/gadgetinspector/1%E8%BF%90%E8%A1%8C%E5%8E%9F%E7%90%86/img/1676531278617.png" srcset="/img/loading.gif" lazyload alt="1676531278617"></p>
+<p>3、加载2.4章中得到的sources.dat，将每个source做为GadgetChain链的第一个节点。程序循环将利用链GadgetChain的末节点做为起点方法查找可调用的子方法、可传递污染的参数索引，如果可以传递污染，那么就将被调用方法加到利用链。最后判断如果末节点调用到我们先前定义好的sink方法，说明利用链可以走通，那么就标记成功，添加到discoveredGadgets中。否则再次循环methodsToExplore进行查找直到方法循环完毕</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/42.png" srcset="/img/loading.gif" lazyload></p>
+<p>如下图的圈1判断当”可传递污染给子方法的调用方法参数索引”与”调用方法可以控制的参数索引”不一致时，污染就无法传递，pass。圈2用于处理”静态分析无法确认程序运行时使用哪个实现方法”的问题，所以将所有实现方法都跑一遍。圈3判断如果新节点在之前访问过，则跳过检查。这里虽然可以避免环的问题，但是会造成漏报，需要修改下逻辑。圈4判断末节点的方法、污染的参数是否与定义好的sink一致，如果一致则添加到利用链discoveredGadgets</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/43.png" srcset="/img/loading.gif" lazyload></p>
+<p>经过MethodDiscovery获取类&#x2F;方法&#x2F;继承关系信息、PassthroughDiscovery获取单个方法内的污染传递、CallGraphDiscovery获取方法间的污染传递、SourceDiscovery获取利用链的source源，最终通过GadgetChainDiscovery 分析前面得到的信息并整合为GadgetChain结果存储到gadget-chains.txt文件中</p>
+<h2 id="3、实际测试"><a href="#3、实际测试" class="headerlink" title="3、实际测试"></a>3、实际测试</h2><p>了解了如上项目源码、工具运行流程之后，我们实际使用GadgetInspector扫描测试一个Demo jar包感受下</p>
+<figure class="highlight mipsasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs mipsasm">Demo代码<br>GadgetInspector-Test-Demo\out\artifacts\GadgetInspector_Test_Demo<br><br>编译gadget-<span class="hljs-keyword">inspector</span><br><span class="hljs-keyword"></span>GadGetResearch\gadgetinspector-master&gt;gradlew.<span class="hljs-keyword">bat </span><span class="hljs-keyword">shadowJar </span>--warning-mode all<br><br>扫描命令<br><span class="hljs-keyword">java </span>-Xmx10g -<span class="hljs-keyword">jar </span>gadget-<span class="hljs-keyword">inspector-all.jar </span>--<span class="hljs-built_in">config</span> <span class="hljs-keyword">jserial </span>E:\imgs-source\GadgetInspector-Test-Demo\out\artifacts\GadgetInspector_Test_Demo\GadgetInspector-Test-Demo.<span class="hljs-keyword">jar</span><br><span class="hljs-keyword"></span><br>项目文件生成位置<br>GadGetResearch\gadgetinspector-master\<span class="hljs-keyword">build\libs</span><br></code></pre></td></tr></table></figure>
+
+<p>1、枚举所有类及类的所有方法，输出类信息文件classes.dat</p>
+<figure class="highlight gradle"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs gradle">org<span class="hljs-regexp">/example/</span>FnCompose	java<span class="hljs-regexp">/lang/</span>Object	org<span class="hljs-regexp">/example/I</span>Fn,java<span class="hljs-regexp">/io/</span>Serializable	<span class="hljs-keyword">false</span>	f1!<span class="hljs-number">2</span>!org<span class="hljs-regexp">/example/I</span>Fn!f2!<span class="hljs-number">2</span>!org<span class="hljs-regexp">/example/I</span>Fn<br>org<span class="hljs-regexp">/example/</span>FnConstant	java<span class="hljs-regexp">/lang/</span>Object	org<span class="hljs-regexp">/example/I</span>Fn,java<span class="hljs-regexp">/io/</span>Serializable	<span class="hljs-keyword">false</span>	value!<span class="hljs-number">2</span>!java<span class="hljs-regexp">/lang/</span>Object<br>org<span class="hljs-regexp">/example/</span>FnEval	java<span class="hljs-regexp">/lang/</span>Object	org<span class="hljs-regexp">/example/I</span>Fn,java<span class="hljs-regexp">/io/</span>Serializable	<span class="hljs-keyword">false</span>	<br>org<span class="hljs-regexp">/example/I</span>Fn	java<span class="hljs-regexp">/lang/</span>Object		<span class="hljs-keyword">true</span>	<br>org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	java/</span>lang<span class="hljs-regexp">/Object	java/i</span>o<span class="hljs-regexp">/Serializable	false	__clojureFnMap!2!java/u</span>til/HashMap<br>org<span class="hljs-regexp">/example/</span>TestDemo	java<span class="hljs-regexp">/lang/</span>Object		<span class="hljs-keyword">false</span>	test!<span class="hljs-number">2</span>!java<span class="hljs-regexp">/lang/</span>String<br></code></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>类名</th>
+<th>父类名</th>
+<th>实现的所有接口</th>
+<th>是否接口</th>
+<th>成员变量(以!分割)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>org&#x2F;example&#x2F;FnCompose</td>
+<td>java&#x2F;lang&#x2F;Object</td>
+<td>org&#x2F;example&#x2F;IFn,java&#x2F;io&#x2F;Serializable</td>
+<td>false</td>
+<td>f1!2!org&#x2F;example&#x2F;IFn!f2!2!org&#x2F;example&#x2F;IFn</td>
+</tr>
+</tbody></table>
+<p>成员变量f1!2!org&#x2F;example&#x2F;IFn!表示：字段名称为f1、modifiers为2(private修饰)、变量类型为org&#x2F;example&#x2F;IFn类</p>
+<p>在gadgetinspector中的定义类为gadgetinspector.data.ClassReference、gadgetinspector.data.ClassReference.Member</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/44.png" srcset="/img/loading.gif" lazyload></p>
+<p>输出方法信息文件methods.dat</p>
+<figure class="highlight gradle"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs gradle">org<span class="hljs-regexp">/example/</span>FnCompose	&lt;init&gt;	(Lorg<span class="hljs-regexp">/example/I</span>Fn;Lorg<span class="hljs-regexp">/example/I</span>Fn;)V	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>FnCompose	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>FnConstant	&lt;init&gt;	(Ljava<span class="hljs-regexp">/lang/</span>Object;)V	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>FnConstant	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>FnEval	&lt;init&gt;	()V	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>FnEval	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/I</span>Fn	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	&lt;init&gt;	(Ljava/u</span>til/HashMap;)V	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/m</span>odel/AbstractTableModel	hashCode	()I	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>TestDemo	&lt;init&gt;	()V	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>TestDemo	pMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	<span class="hljs-keyword">false</span><br>org<span class="hljs-regexp">/example/</span>TestDemo	cMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	<span class="hljs-keyword">false</span><br></code></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>方法所在类</th>
+<th>方法名</th>
+<th>方法参数及返回值</th>
+<th>是否静态方法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>org&#x2F;example&#x2F;FnCompose</td>
+<td>invokeCall</td>
+<td>(Ljava&#x2F;lang&#x2F;Object;)Ljava&#x2F;lang&#x2F;Object;</td>
+<td>false</td>
+</tr>
+</tbody></table>
+<p>在gadgetinspector中的定义类为gadgetinspector.data.MethodReference</p>
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/45.png" srcset="/img/loading.gif" lazyload></p>
+<p>inheritanceMap.dat  类的继承关系</p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs awk">org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	java/</span>lang<span class="hljs-regexp">/Object	java/i</span>o/Serializable<br>org<span class="hljs-regexp">/example/</span>FnCompose	java<span class="hljs-regexp">/lang/</span>Object	java<span class="hljs-regexp">/io/</span>Serializable	org<span class="hljs-regexp">/example/</span>IFn<br>org<span class="hljs-regexp">/example/</span>FnEval	java<span class="hljs-regexp">/lang/</span>Object	java<span class="hljs-regexp">/io/</span>Serializable	org<span class="hljs-regexp">/example/</span>IFn<br>org<span class="hljs-regexp">/example/</span>TestDemo	java<span class="hljs-regexp">/lang/</span>Object<br>org<span class="hljs-regexp">/example/</span>FnConstant	java<span class="hljs-regexp">/lang/</span>Object	java<span class="hljs-regexp">/io/</span>Serializable	org<span class="hljs-regexp">/example/</span>IFn<br>org<span class="hljs-regexp">/example/</span>IFn	java<span class="hljs-regexp">/lang/</span>Object<br></code></pre></td></tr></table></figure>
+
+<p>2、生成passthrough数据流，输出信息文件passthrough.dat</p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs awk">org<span class="hljs-regexp">/example/</span>TestDemo	cMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	<span class="hljs-number">1</span>,<br>org<span class="hljs-regexp">/example/</span>TestDemo	pMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	<span class="hljs-number">1</span>,<br>org<span class="hljs-regexp">/example/</span>FnConstant	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-number">0</span>,   <span class="hljs-number">0</span>是实例<br></code></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>类名</th>
+<th>方法名</th>
+<th>方法描述</th>
+<th>能污染的参数1索引,能污染的参数2索引</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>org&#x2F;example&#x2F;TestDemo</td>
+<td>cMethod</td>
+<td>(Ljava&#x2F;lang&#x2F;String;)Ljava&#x2F;lang&#x2F;String;</td>
+<td>1,</td>
+</tr>
+</tbody></table>
+<p>3、生成passthrough调用图，输出信息文件callgraph.dat</p>
+<figure class="highlight gradle"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs gradle">org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	hashCode	()I	org/</span>example<span class="hljs-regexp">/IFn	invokeCall	(Ljava/</span>lang<span class="hljs-regexp">/Object;)Ljava/</span>lang/Object;	<span class="hljs-number">0</span>	__clojureFnMap	<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	hashCode	()I	java/u</span>til/HashMap	hashCode	()I	<span class="hljs-number">0</span>	__clojureFnMap	<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>TestDemo	pMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	org<span class="hljs-regexp">/example/</span>TestDemo	cMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	<span class="hljs-number">1</span>		<span class="hljs-number">1</span><br>org<span class="hljs-regexp">/example/</span>TestDemo	pMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	org<span class="hljs-regexp">/example/</span>TestDemo	cMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	<span class="hljs-number">0</span>		<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>TestDemo	cMethod	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>String;	java<span class="hljs-regexp">/lang/</span>String	toUpperCase	()Ljava<span class="hljs-regexp">/lang/</span>String;	<span class="hljs-number">1</span>		<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>FnCompose	&lt;init&gt;	(Lorg<span class="hljs-regexp">/example/I</span>Fn;Lorg<span class="hljs-regexp">/example/I</span>Fn;)V	java<span class="hljs-regexp">/lang/</span>Object	&lt;init&gt;	()V	<span class="hljs-number">0</span>		<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	&lt;init&gt;	(Ljava/u</span>til<span class="hljs-regexp">/HashMap;)V	java/</span>lang/Object	&lt;init&gt;	()V	<span class="hljs-number">0</span>		<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>FnEval	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	java<span class="hljs-regexp">/lang/</span><span class="hljs-keyword">Runtime</span>	exec	(Ljava<span class="hljs-regexp">/lang/</span>String;)Ljava<span class="hljs-regexp">/lang/</span>Process;	<span class="hljs-number">1</span>		<span class="hljs-number">1</span><br>org<span class="hljs-regexp">/example/</span>FnCompose	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	org<span class="hljs-regexp">/example/I</span>Fn	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-number">1</span>		<span class="hljs-number">1</span><br>org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	hashCode	()I	java/u</span>til<span class="hljs-regexp">/HashMap	get	(Ljava/</span>lang<span class="hljs-regexp">/Object;)Ljava/</span>lang/Object;	<span class="hljs-number">0</span>	__clojureFnMap	<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>TestDemo	&lt;init&gt;	()V	java<span class="hljs-regexp">/lang/</span>Object	&lt;init&gt;	()V	<span class="hljs-number">0</span>		<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>FnCompose	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	org<span class="hljs-regexp">/example/I</span>Fn	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-number">0</span>	f2	<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>FnCompose	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	org<span class="hljs-regexp">/example/I</span>Fn	invokeCall	(Ljava<span class="hljs-regexp">/lang/</span>Object;)Ljava<span class="hljs-regexp">/lang/</span>Object;	<span class="hljs-number">0</span>	f1	<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/</span>FnEval	&lt;init&gt;	()V	java<span class="hljs-regexp">/lang/</span>Object	&lt;init&gt;	()V	<span class="hljs-number">0</span>		<span class="hljs-number">0</span><br>org<span class="hljs-regexp">/example/m</span>odel<span class="hljs-regexp">/AbstractTableModel	hashCode	()I	org/</span>example<span class="hljs-regexp">/IFn	invokeCall	(Ljava/</span>lang<span class="hljs-regexp">/Object;)Ljava/</span>lang/Object;	<span class="hljs-number">0</span>		<span class="hljs-number">1</span><br>org<span class="hljs-regexp">/example/</span>FnConstant	&lt;init&gt;	(Ljava<span class="hljs-regexp">/lang/</span>Object;)V	java<span class="hljs-regexp">/lang/</span>Object	&lt;init&gt;	()V	<span class="hljs-number">0</span>		<span class="hljs-number">0</span><br></code></pre></td></tr></table></figure>
+
+<p>4、搜索可用的source，输出信息文件sources.dat</p>
+<figure class="highlight awk"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs awk">org<span class="hljs-regexp">/example/m</span>odel/AbstractTableModel	hashCode	()I	<span class="hljs-number">0</span><br></code></pre></td></tr></table></figure>
+
+<p>5、搜索生成调用链，输出结果文件gadget-chains.txt</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs bash">org/apache/log4j/pattern/LogEvent.readObject(Ljava/io/ObjectInputStream;)V (1)<br>  org/apache/log4j/pattern/LogEvent.readLevel(Ljava/io/ObjectInputStream;)V (1)<br>  java/lang/reflect/Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; (0)<br><br>org/apache/log4j/spi/LoggingEvent.readObject(Ljava/io/ObjectInputStream;)V (1)<br>  org/apache/log4j/spi/LoggingEvent.readLevel(Ljava/io/ObjectInputStream;)V (1)<br>  java/lang/reflect/Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; (0)<br><br>//最终生成的反序列化链<br>org/example/model/AbstractTableModel.hashCode()I (0)<br>  org/example/FnEval.invokeCall(Ljava/lang/Object;)Ljava/lang/Object; (1)<br>  java/lang/Runtime.<span class="hljs-built_in">exec</span>(Ljava/lang/String;)Ljava/lang/Process; (1)<br><br></code></pre></td></tr></table></figure>
+
+<p><img src="/img/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/46.png" srcset="/img/loading.gif" lazyload></p>
+<h2 id="4、总结"><a href="#4、总结" class="headerlink" title="4、总结"></a>4、总结</h2><p>在花了几周时间分析完该项目后，对于利用ASM技术、JVM指令、模拟栈调用等解决静态扫描的问题有了一些认知了解。当然在分析过程中也发现该工具的一些弊端或者说是bug，如Transient修饰字段处理逻辑、广度优先的搜索策略、source源&#x2F;sink源不完善等问题。而搞清楚问题之后下一步就是解决问题、完善代码逻辑。另外GadgetInspector直接分析war&#x2F;jar的方式比较贴合平时做漏洞挖掘的工作场景，如在一线攻防演练时拿到了java war包，由于项目周期短 可能急需一个点撕开防守的口子，这时候扫描工具可以帮助我们快速做一些基础分析的工作，基于我们提前指定的source源、sink漏洞点分析拿到项目的所有路由、可能存在的攻击链路，而具体漏洞EXP利用的构造交给我们自己。相信随着规则的完善，也会很大的辅助增强我们审计挖掘的效率。所以在完善gadget的扫描逻辑后也考虑基于此工具二开以简化平时一些常规漏洞的挖掘审计工作。写到这里 成文已经又臭又长，不再赘述了。下一步的todo-list就是着重代码逻辑完善、规则优化、常规漏洞挖掘等相关问题。安全路漫漫~</p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+    <div class="post-meta mr-3 d-flex align-items-center">
+      <i class="iconfont icon-category"></i>
+      
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%AE%A1%E8%AE%A1/" class="category-chain-item">自动化审计</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+    </div>
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/JavaSec/">#JavaSec</a>
+      
+        <a href="/tags/%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90/">#静态分析</a>
+      
+        <a href="/tags/GadgetInspector/">#GadgetInspector</a>
+      
+        <a href="/tags/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%AE%A1%E8%AE%A1/">#自动化审计</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>静态代码扫描工具之GadgetInspector探究</div>
+      <div>https://pwnull.github.io/2023/Research-on-GadgetInspector-of-Static-Code-Scanning-Tool/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>pwnull</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2023年2月28日</div>
+        </div>
+      
+      
+      <div class="license-meta-item">
+        <div>许可协议</div>
+        <div>
+          
+            
+            
+              <a target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+              <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                <i class="iconfont icon-by"></i>
+              </span>
+              </a>
+            
+          
+        </div>
+      </div>
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2023/Research-VMware-vRealize-Log-Insight-CVE-vulnerability/" title="VMware-vRealize-Log-Insight-CVE漏洞追踪">
+                        <span class="hidden-mobile">VMware-vRealize-Log-Insight-CVE漏洞追踪</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+      @pwnull
+    </div>
+  
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.0/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.18.2/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      headingSelector : CONFIG.toc.headingSelector || 'h1,h2,h3,h4,h5,h6',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      collapseDepth   : CONFIG.toc.collapseDepth || 0,
+      scrollSmooth    : true,
+      headingsOffset  : -boardTop
+    });
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.10/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
