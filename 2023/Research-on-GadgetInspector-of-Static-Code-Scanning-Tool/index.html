@@ -286,7 +286,7 @@
 <p><a target="_blank" rel="noopener" href="https://threedr3am.github.io/2020/01/09/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E5%88%A9%E7%94%A8%E9%93%BE%E8%87%AA%E5%8A%A8%E6%8C%96%E6%8E%98%E5%B7%A5%E5%85%B7gadgetinspector%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90/">threedr3am-java反序列化利用链自动挖掘工具gadgetinspector源码浅析</a></p>
 <p><a target="_blank" rel="noopener" href="https://paper.seebug.org/1034/">Longofo-Java 反序列化工具 gadgetinspector 初窥</a></p>
 <p><a target="_blank" rel="noopener" href="https://su18.org/post/gadgetor/">su18-高效挖掘反序列化漏洞——GadgetInspector改造</a></p>
-<p>整体来看 GadgetInspector工具运行流程主要为对classpath中全部class进行信息收集，生成方法内、方法间的污点传递关系，最终找到从source可以通往sink的利用链。另外扫描针对的是java字节码，所以可以直接分析Jar包&#x2F;War包而无需项目java源码。整个过程还是比较清晰的，其中涉及到JAVA ASM技术、JVM指令、匿拓扑排序、进出栈模拟等等知识。之前对这块内容了解不多，也想做个扫描工具辅助自己做一些基础审计的工作，争取早日解放双手！本文从所需的前置知识、分析扫描流程中的关键类及实际测试扫描三部分展开，如果对文章有疑问&#x2F;建议或者想一起研究交流的师傅，欢迎私信😜</p>
+<p>整体来看 GadgetInspector工具运行流程主要为对classpath中全部class进行信息收集，生成方法内、方法间的污点传递关系，最终找到从source可以通往sink的利用链。另外扫描针对的是java字节码，所以可以直接分析Jar包&#x2F;War包而无需项目java源码。整个过程还是比较清晰的，其中涉及到JAVA ASM技术、JVM指令、逆拓扑排序、进出栈模拟等等知识。之前对这块内容了解不多，也想做个扫描工具辅助自己做一些基础审计的工作，争取早日解放双手！本文从所需的前置知识、分析扫描流程中的关键类及实际测试扫描三部分展开，如果对文章有疑问&#x2F;建议或者想一起研究交流的师傅，欢迎私信😜</p>
 <h2 id="1、前置知识"><a href="#1、前置知识" class="headerlink" title="1、前置知识"></a>1、前置知识</h2><p>前置知识部分主要有描述符、ASM技术及JVM相关的知识。万丈高楼平地起，晓得了基础知识方便后续展开分析</p>
 <h3 id="1-1-描述符"><a href="#1-1-描述符" class="headerlink" title="1.1 描述符"></a>1.1 描述符</h3><p>GadgetInspector最开始对类、方法信息搜集阶段会用到类型及方法描述符</p>
 <p>1、类型描述符，JAVA原始类型的描述符均对应一个大写字母。非数组的引用类型使用：<code>L+类全限定名称+;</code> 、数组引用类型使用：<code>[+数组内类型描述符+;</code></p>
@@ -640,6 +640,12 @@
                 <div class="post-prevnext my-3">
                   <article class="post-prev col-6">
                     
+                    
+                      <a href="/2023/From-apache-httpd-ssrf-cve-2021-40438-to-Rce/" title="从HTTPD-SSRF CVE-2021-40438起手的RCE漏洞挖掘">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">从HTTPD-SSRF CVE-2021-40438起手的RCE漏洞挖掘</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
                     
                   </article>
                   <article class="post-next col-6">
