@@ -217,6 +217,75 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h1 class="index-header">
         
+        <a href="/2024/oracle%20weblogic%20CVE-2024-21006%20Double-JNDInjection%20RCE%20analyze/" target="_self">
+          CVE-2024-21006 Oracle Weblogic Double-JNDInjection RCE挖掘记录
+        </a>
+      </h1>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/oracle%20weblogic%20CVE-2024-21006%20Double-JNDInjection%20RCE%20analyze/" target="_self">
+        <div>
+          之前提给Oracle的洞，近期官方发Q2季度更新补丁修复了。这个洞是在weblogic新版中发现的一个新的攻击手法：二次JNDI注入，即在JNDI注入过程中触发JNDI注入，进而完成RCE。 1、简述总的来讲这个漏洞：1、weblogic在处理客户端的lookup操作时，会根据目标类实现接口的不同从而调用不同的方法，如果实现OpaqueReference接口就会调用目标类的getReferent方
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-04-24 22:00" pubdate>
+              2024-04-24
+            </time>
+          </div>
+        
+        
+          <div class="post-meta mr-3 d-flex align-items-center">
+            <i class="iconfont icon-category"></i>
+            
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/" class="category-chain-item">代码审计</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+          </div>
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/JNDI/">#JNDI</a>
+            
+              <a href="/tags/CVE/">#CVE</a>
+            
+              <a href="/tags/%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96/">#反序列化</a>
+            
+              <a href="/tags/Oracle-Weblogic/">#Oracle Weblogic</a>
+            
+              <a href="/tags/Double-JNDInjection/">#Double-JNDInjection</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h1 class="index-header">
+        
         <a href="/2023/from-urlparser-to-authbypass-SpringSecurity/" target="_self">
           URL解析导致的鉴权绕过问题探究-SpringSecurity篇
         </a>
@@ -818,70 +887,13 @@
     </article>
   </div>
 
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h1 class="index-header">
-        
-        <a href="/2022/jndi-injection-history/" target="_self">
-          当我们谈论JNDI注入时，我们在谈论什么
-        </a>
-      </h1>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2022/jndi-injection-history/" target="_self">
-        <div>
-          JNDI注入的利用根据JDK更新历史可以分为两个阶段，第一阶段是在JDK8u191之前，攻击者可以利用自搭建的RMI&#x2F;LDAP恶意服务器，让客户端去获取并加载我们放置的恶意类，该阶段的利用手法不受classpath是否拥有Gadget的限制。第二阶段是在JDK8u191之后，JDK增加了trustURLCodebase配置导致这种加载恶意类的方式失效，进而找出了 javaSerializ
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2022-11-05 10:00" pubdate>
-              2022-11-05
-            </time>
-          </div>
-        
-        
-          <div class="post-meta mr-3 d-flex align-items-center">
-            <i class="iconfont icon-category"></i>
-            
-
-<span class="category-chains">
-  
-  
-    
-      <span class="category-chain">
-        
-  <a href="/categories/%E4%BB%A3%E7%A0%81%E5%AE%A1%E8%AE%A1/" class="category-chain-item">代码审计</a>
-  
-  
-
-      </span>
-    
-  
-</span>
-
-          </div>
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/JavaSec/">#JavaSec</a>
-            
-              <a href="/tags/JNDI/">#JNDI</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
 
 
+  <nav aria-label="navigation">
+    <span class="pagination" id="pagination">
+      <span class="page-number current">1</span><a class="page-number" href="/page/2/#board">2</a><a class="extend next" rel="next" href="/page/2/#board"><i class="iconfont icon-arrowright"></i></a>
+    </span>
+  </nav>
 
 
 
